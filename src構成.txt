@@ -1,0 +1,38 @@
+.
+├── backend/                              # バックエンド（Node.js/Express等）
+│   ├── config/                          # データベース設定、環境変数設定
+│   ├── controllers/                     # ビジネスロジック
+│   ├── middleware/                      # ルート保護、リクエスト検証、エラーハンドリング
+│   ├── models/                          # DBスキーマ（テーブル定義）
+│   ├── routes/                          # ルーティング
+│   ├── services/                        # 外部サービス連携等
+│   ├── utils/                           # 共通ヘルパー関数
+│   ├── views/                           # テンプレート（メール等）
+│   └── tests/                           # バックエンドテスト
+│
+├── frontend/                             # フロントエンド（React等）
+│   ├── public/                          # 静的アセット（index.html, favicon等）
+│   │   └── assets/
+│   ├── components/                      # UIコンポーネント
+│   │   ├── common/                      # 共通パーツ
+│   │   ├── layout/                      # レイアウト用
+│   │   └── forms/                       # フォーム関連
+│   ├── pages/                           # ページコンポーネント
+│   ├── routes/                          # フロントエンドルーティング
+│   ├── services/                        # APIクライアント、認証APIコール
+│   ├── hooks/                           # カスタムフック
+│   ├── context/                         # グローバルステート
+│   ├── store/                           # 状態管理（Redux/Zustand等）
+│   ├── styles/                          # グローバルスタイル
+│   └── utils/                           # ユーティリティ
+│
+├── shared/                               # 前後端共有コード
+│   ├── types/                           # 型定義（TypeScript）
+│   ├── constants/                       # 共通定数
+│   └── utils/                           # 共通関数
+│
+├── uploads/                              # アップロードファイル保持（Git管理外推奨）
+├── docs/                                 # ドキュメント類
+├── docker-compose.yml
+├── README.md
+└── package.json                          # プロジェクト全体の管理
