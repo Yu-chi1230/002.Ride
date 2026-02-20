@@ -1,0 +1,345 @@
+/* =========================================
+   HealthPage.css
+========================================= */
+
+.health-page {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    background-color: #0d0d0d;
+    color: #ffffff;
+    font-family: 'Inter', sans-serif;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Header */
+.health-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem 1.5rem 0.5rem;
+    z-index: 10;
+}
+
+.back-btn {
+    background: none;
+    border: none;
+    color: #888;
+    font-size: 1rem;
+    cursor: pointer;
+    padding: 0;
+}
+
+.health-title {
+    margin: 0;
+    font-size: 1.2rem;
+    font-weight: 300;
+    letter-spacing: 0.1em;
+    color: #e6e6e6;
+}
+
+.spacer {
+    width: 50px;
+    /* back-btnと同じ幅にして中央揃えを維持 */
+}
+
+/* Mode Selector */
+.mode-selector {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    margin: 1rem 0;
+    z-index: 10;
+}
+
+.mode-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #888;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.mode-btn.active {
+    background: rgba(200, 160, 80, 0.2);
+    border-color: rgba(200, 160, 80, 0.5);
+    color: #c8a050;
+}
+
+/* Content Area */
+.health-content {
+    flex: 1;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    padding: 0 1.5rem 5rem;
+    /* bottom-nav文の余白 */
+    overflow-y: auto;
+}
+
+.audio-section,
+.camera-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.5s ease;
+}
+
+.inactive-section {
+    display: none;
+}
+
+.active-section {
+    animation: fadeIn 0.5s ease-out;
+}
+
+/* --- Audio UI --- */
+.audio-instruction {
+    text-align: center;
+    margin-bottom: 2rem;
+}
+
+.audio-instruction h3 {
+    font-weight: 400;
+    color: #c8a050;
+    margin: 0 0 0.5rem 0;
+}
+
+.audio-instruction p {
+    font-size: 0.8rem;
+    color: #888;
+    margin: 0;
+}
+
+.waveform-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    height: 100px;
+    width: 100%;
+    margin-bottom: 3rem;
+}
+
+.waveform-bar {
+    width: 4px;
+    background: #444;
+    border-radius: 2px;
+    transition: height 0.15s ease, background-color 0.5s ease;
+}
+
+.waveform-container.recording .waveform-bar {
+    /* 録音中は黄金色に輝く */
+    background: #c8a050;
+    box-shadow: 0 0 8px rgba(200, 160, 80, 0.8);
+    /* React側で高さをランダムに変えるが、CSSアニメーションも併用可能 */
+}
+
+.record-btn {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: rgba(200, 160, 80, 0.1);
+    border: 2px solid #c8a050;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.record-inner {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: #c8a050;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.record-btn.recording .record-inner {
+    border-radius: 12px;
+    transform: scale(0.5);
+    background: #cc4444;
+    /* 録音中止用の赤色 */
+}
+
+.record-btn.recording {
+    border-color: #cc4444;
+    animation: pulseRed 2s infinite;
+}
+
+.recording-status {
+    margin-top: 1.5rem;
+    color: #cc4444;
+    font-family: monospace;
+    font-size: 0.9rem;
+    animation: blink 1s infinite alternate;
+}
+
+
+/* --- Camera UI --- */
+.camera-instruction {
+    text-align: center;
+    margin-bottom: 1.5rem;
+}
+
+.camera-instruction h3 {
+    font-weight: 400;
+    color: #44aacc;
+    margin: 0 0 0.5rem 0;
+}
+
+.camera-instruction p {
+    font-size: 0.8rem;
+    color: #888;
+    margin: 0;
+}
+
+/* カメラのファインダー枠（シネマティック） */
+.camera-viewfinder {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4/3;
+    max-height: 50vh;
+    border-radius: 12px;
+    background: #111;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.mock-camera-feed {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    color: #333;
+}
+
+.mock-camera-feed .camera-icon {
+    font-size: 3rem;
+    margin-bottom: 0.5rem;
+}
+
+/* ファインダーの四隅の枠線 */
+.camera-viewfinder::before,
+.camera-viewfinder::after {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+.corner-tl,
+.corner-tr,
+.corner-bl,
+.corner-br {
+    position: absolute;
+    width: 30px;
+    height: 30px;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    z-index: 2;
+}
+
+.corner-tl {
+    top: 10px;
+    left: 10px;
+    border-right: none;
+    border-bottom: none;
+}
+
+.corner-tr {
+    top: 10px;
+    right: 10px;
+    border-left: none;
+    border-bottom: none;
+}
+
+.corner-bl {
+    bottom: 10px;
+    left: 10px;
+    border-right: none;
+    border-top: none;
+}
+
+.corner-br {
+    bottom: 10px;
+    right: 10px;
+    border-left: none;
+    border-top: none;
+}
+
+.camera-controls {
+    margin-top: 2rem;
+}
+
+.shutter-btn {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    background: none;
+    border: 4px solid #ffffff;
+    cursor: pointer;
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.shutter-btn::after {
+    content: '';
+    width: 52px;
+    height: 52px;
+    background: #ffffff;
+    border-radius: 50%;
+    transition: transform 0.1s ease;
+}
+
+.shutter-btn:active::after {
+    transform: scale(0.85);
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes pulseRed {
+    0% {
+        box-shadow: 0 0 0 0 rgba(204, 68, 68, 0.4);
+    }
+
+    70% {
+        box-shadow: 0 0 0 15px rgba(204, 68, 68, 0);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(204, 68, 68, 0);
+    }
+}
+
+@keyframes blink {
+    from {
+        opacity: 1;
+    }
+
+    to {
+        opacity: 0.3;
+    }
+}
