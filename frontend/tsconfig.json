@@ -21,7 +21,15 @@
         "noFallthroughCasesInSwitch": true
     },
     "include": [
-        "src"
+        "src",
+        "pages",
+        "components",
+        "hooks",
+        "context",
+        "store",
+        "services",
+        "utils",
+        "routes"
     ],
     "references": [
         {
