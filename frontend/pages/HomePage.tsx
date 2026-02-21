@@ -22,15 +22,34 @@ function HomePage() {
 
             <div className="home-content">
                 {/* 1. Header (Status) */}
-                <header className="home-header">
-                    <div className="status-block">
-                        <h2 className="vehicle-name">{vehicleName}</h2>
-                        <span className="vehicle-odo">ODO: {currentOdo}</span>
+                <header className="home-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                        <div className="status-block">
+                            <h2 className="vehicle-name">{vehicleName}</h2>
+                            <span className="vehicle-odo">ODO: {currentOdo}</span>
+                        </div>
+                        <div className="health-block">
+                            <span className="health-label">HEALTH</span>
+                            <span className="health-score">{healthScore}</span>
+                        </div>
                     </div>
-                    <div className="health-block">
-                        <span className="health-label">HEALTH</span>
-                        <span className="health-score">{healthScore}</span>
-                    </div>
+                    <button
+                        onClick={async () => {
+                            const { supabase } = await import('../src/lib/supabase');
+                            await supabase.auth.signOut();
+                        }}
+                        style={{
+                            background: 'transparent',
+                            border: '1px solid rgba(255, 255, 255, 0.2)',
+                            color: 'rgba(255, 255, 255, 0.7)',
+                            padding: '6px 12px',
+                            borderRadius: '20px',
+                            fontSize: '0.8rem',
+                            cursor: 'pointer'
+                        }}
+                    >
+                        Sign Out
+                    </button>
                 </header>
 
                 {/* 2. Main Features (3 Cards) */}

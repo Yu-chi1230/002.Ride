@@ -19,9 +19,23 @@ function LoginPage() {
     const [errorMsg, setErrorMsg] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
-    const handleGoogleLogin = () => {
-        // TODO: Supabase Google OAuth連携
-        console.log('Google login clicked — Supabase Auth integration coming soon');
+    const handleGoogleLogin = async () => {
+        try {
+            const { error } = await supabase.auth.signInWithOAuth({
+                provider: 'google',
+                options: {
+                    // Redirect back to app after login - in production this would be the actual domain
+                    redirectTo: `${window.location.origin}/home`
+                }
+            });
+            if (error) {
+                console.error('Google login error:', error.message);
+                setErrorMsg('Googleログインに失敗しました。');
+            }
+        } catch (error: any) {
+            console.error('Google login error:', error);
+            setErrorMsg('エラーが発生しました。もう一度お試しください。');
+        }
     };
 
     const handleEmailLogin = async (e: React.FormEvent) => {
@@ -48,7 +62,10 @@ function LoginPage() {
 
             if (data.user) {
                 console.log('Login Success:', data.user.email);
-                navigate('/home');
+                // navigate('/home') is no longer strictly needed here if wrapped in AuthRoute
+                // because AuthRoute will detect the user and redirect automatically.
+                // But we leave it for immediate UX confirmation.
+                // Actually, letting AuthRoute handle it is cleaner and avoids navigation race conditions.
             }
         } catch (error: any) {
             console.error('Login Error:', error);
