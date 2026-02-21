@@ -1,3 +1,6 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { supabase } from '../src/lib/supabase';
 import './LoginPage.css';
 
 const GoogleIcon = () => (
@@ -10,9 +13,49 @@ const GoogleIcon = () => (
 );
 
 function LoginPage() {
+    const navigate = useNavigate();
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [errorMsg, setErrorMsg] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+
     const handleGoogleLogin = () => {
         // TODO: Supabase Google OAuth連携
         console.log('Google login clicked — Supabase Auth integration coming soon');
+    };
+
+    const handleEmailLogin = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setErrorMsg('');
+
+        if (!email.trim() || !password.trim()) {
+            setErrorMsg('メールアドレスとパスワードを入力してください。');
+            return;
+        }
+
+        setIsLoading(true);
+        try {
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email: email.trim(),
+                password: password.trim(),
+            });
+
+            if (error) {
+                // Supabase returns specific error messages that might signify wrong password or user not found
+                setErrorMsg('メールアドレスまたはパスワードが間違っています。');
+                return;
+            }
+
+            if (data.user) {
+                console.log('Login Success:', data.user.email);
+                navigate('/home');
+            }
+        } catch (error: any) {
+            console.error('Login Error:', error);
+            setErrorMsg('エラーが発生しました。もう一度お試しください。');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
@@ -48,6 +91,48 @@ function LoginPage() {
                     <GoogleIcon />
                     Google でログイン
                 </button>
+
+                <div className="login-divider">
+                    <span className="login-divider-text">または</span>
+                </div>
+
+                <form className="login-form" onSubmit={handleEmailLogin}>
+                    <input
+                        type="email"
+                        className="login-input"
+                        placeholder="メールアドレス"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                    />
+                    <input
+                        type="password"
+                        className="login-input"
+                        placeholder="パスワード"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                    />
+                    {errorMsg && <div className="login-error-msg">{errorMsg}</div>}
+                    <button
+                        type="submit"
+                        className="login-submit-btn"
+                        disabled={isLoading}
+                    >
+                        {isLoading ? 'ログイン中...' : 'ログイン'}
+                    </button>
+
+                    <div className="login-signup-prompt">
+                        <span className="login-signup-text">アカウントをお持ちでないですか？</span>
+                        <button
+                            type="button"
+                            className="login-signup-link"
+                            onClick={() => navigate('/onboarding')}
+                        >
+                            アカウント作成はこちらから
+                        </button>
+                    </div>
+                </form>
             </div>
 
             {/* Footer */}
