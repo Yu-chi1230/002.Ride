@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import express from 'express';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import { createClient } from '@supabase/supabase-js';
 import { PrismaClient } from '@prisma/client';
@@ -29,11 +29,65 @@ app.get('/health', (_req, res) => {
     res.json({ status: 'healthy', timestamp: new Date().toISOString() });
 });
 
-// User Onboarding Endpoint (Profile Data only)
-app.post('/api/users/onboarding', async (req, res) => {
-    const { userId, lastName, firstName, displayName, email, vehicleMaker, vehicleName } = req.body;
+// Extend Express Request to include user
+interface AuthRequest extends Request {
+    user?: any; // Supabase user type
+}
 
-    if (!userId || !lastName || !firstName || !displayName || !email || !vehicleMaker || !vehicleName) {
+// Supabase JWT Verification Middleware
+const requireAuth = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Unauthorized: No token provided' });
+    }
+
+    const token = authHeader.split(' ')[1];
+
+    // Validate token against Supabase
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+
+    if (error || !user) {
+        console.error('Auth Verification Error:', error?.message);
+        return res.status(401).json({ error: 'Unauthorized: Invalid token' });
+    }
+
+    req.user = user;
+    next();
+};
+
+// Get Current User Profile
+app.get('/api/users/me', requireAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const userId = req.user.id;
+
+        // Fetch profile with vehicles
+        const profile = await prisma.profiles.findUnique({
+            where: { id: userId },
+            include: { vehicles: true } // Assuming relation is named 'vehicles'
+        });
+
+        if (!profile) {
+            return res.status(404).json({ error: 'Profile not found', hasProfile: false });
+        }
+
+        res.json({ data: profile, hasProfile: true });
+    } catch (error) {
+        console.error('Error fetching user profile:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// User Onboarding Endpoint (Profile Data only)
+app.post('/api/users/onboarding', requireAuth, async (req: AuthRequest, res: Response) => {
+    // Ignore userId from body to prevent tampering, use req.user.id from the verified JWT instead.
+    const { lastName, firstName, displayName, email, vehicleMaker, vehicleName } = req.body;
+    const userId = req.user.id;
+
+    if (!lastName || !firstName || !displayName || !email || !vehicleMaker || !vehicleName) {
         return res.status(400).json({ error: 'Missing required fields' });
     }
 

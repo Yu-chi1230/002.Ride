@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../src/lib/supabase';
+import { apiFetch } from '../src/lib/api';
 import './OnboardingPage.css';
 
 function OnboardingPage() {
@@ -70,12 +71,8 @@ function OnboardingPage() {
             };
 
             // 3. Send securely to backend for Profile and Vehicle DB creation
-            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8001';
-            const response = await fetch(`${apiUrl}/api/users/onboarding`, {
+            const response = await apiFetch('/api/users/onboarding', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
                 body: JSON.stringify(payload)
             });
 
