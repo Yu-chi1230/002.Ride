@@ -8,15 +8,28 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001';
  * @param options fetch のオプション
  * @returns fetch の Response オブジェクト
  */
-export async function apiFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
-    // 最新のセッションを取得し、トークンを取り出します
-    const { data: { session }, error } = await supabase.auth.getSession();
+export async function apiFetch(endpoint: string, options: RequestInit = {}, tokenOverride?: string | null): Promise<Response> {
+    console.log(`[apiFetch] Starting request for endpoint: ${endpoint}`);
 
-    if (error) {
-        console.error('Failed to get session from supabase auth:', error.message);
+    let token = tokenOverride;
+
+    // If no token override is provided, try to fetch it from Supabase
+    if (token === undefined) {
+        console.log(`[apiFetch] Calling supabase.auth.getSession()...`);
+        try {
+            const { data: { session }, error } = await supabase.auth.getSession();
+            if (error) {
+                console.error('[apiFetch] Failed to get session from supabase auth:', error.message);
+            }
+            token = session?.access_token;
+            console.log(`[apiFetch] supabase.auth.getSession() resolved. Token retrieved: ${!!token}`);
+        } catch (e) {
+            console.error(`[apiFetch] supabase.auth.getSession() threw error:`, e);
+            throw e;
+        }
+    } else {
+        console.log(`[apiFetch] Using provided token override: ${!!token}`);
     }
-
-    const token = session?.access_token;
 
     // ヘッダーの設定
     const headers = new Headers(options.headers || {});
@@ -39,6 +52,14 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}): Pro
 
     // URLの構築
     const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
+    console.log(`[apiFetch] Executing fetch to URL: ${url}`);
 
-    return fetch(url, config);
+    try {
+        const response = await fetch(url, config);
+        console.log(`[apiFetch] fetch completed for ${url} with status ${response.status}`);
+        return response;
+    } catch (e) {
+        console.error(`[apiFetch] fetch threw an error for ${url}:`, e);
+        throw e;
+    }
 }

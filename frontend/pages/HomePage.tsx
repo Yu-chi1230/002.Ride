@@ -1,14 +1,27 @@
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../src/contexts/AuthContext';
 import BottomNav from '../components/BottomNav';
 import './HomePage.css';
 
 function HomePage() {
     const navigate = useNavigate();
+    const { profileData } = useAuth();
 
-    // モックデータ
-    const vehicleName = "Zephyr χ";
-    const currentOdo = "34,200 km";
-    const healthScore = 98;
+    // 最初の車両データを取得（複数車両対応は将来の拡張）
+    const vehicle = profileData?.vehicles?.[0] ?? null;
+
+    // 走行距離のフォーマット（例: 34200 → "34,200 km"）
+    const formatMileage = (mileage: number | null | undefined): string => {
+        if (mileage == null) return '--- km';
+        return `${mileage.toLocaleString()} km`;
+    };
+
+    const vehicleName = vehicle
+        ? `${vehicle.maker} ${vehicle.model_name}`
+        : '車両未登録';
+    const currentOdo = formatMileage(vehicle?.current_mileage);
+
+    // ルート推薦（Explore機能実装時にリアルデータ化予定）
     const recommendedRoute = {
         title: "阿蘇パノラマライン",
         duration: "1h",
@@ -30,7 +43,7 @@ function HomePage() {
                         </div>
                         <div className="health-block">
                             <span className="health-label">HEALTH</span>
-                            <span className="health-score">{healthScore}</span>
+                            <span className="health-score">--</span>
                         </div>
                     </div>
                     <button
@@ -98,3 +111,4 @@ function HomePage() {
 }
 
 export default HomePage;
+

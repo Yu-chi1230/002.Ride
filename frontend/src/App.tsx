@@ -11,7 +11,7 @@ import AuthRoute from './components/AuthRoute';
 function App() {
     return (
         <AuthProvider>
-            <BrowserRouter>
+            <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
                 <Routes>
                     {/* Public routes for unauthenticated users only */}
                     <Route element={<AuthRoute />}>
