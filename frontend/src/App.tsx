@@ -3,6 +3,7 @@ import '../styles/global.css';
 import LoginPage from '../pages/LoginPage';
 import HomePage from '../pages/HomePage';
 import HealthPage from '../pages/HealthPage';
+import ExplorePage from '../pages/ExplorePage';
 import OnboardingPage from '../pages/OnboardingPage';
 import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -22,6 +23,7 @@ function App() {
                     {/* Protected routes for authenticated users only */}
                     <Route element={<ProtectedRoute />}>
                         <Route path="/home" element={<HomePage />} />
+                        <Route path="/explore" element={<ExplorePage />} />
                     </Route>
 
                     {/* Common / Utility Routes */}

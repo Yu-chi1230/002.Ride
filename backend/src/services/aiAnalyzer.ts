@@ -1,5 +1,5 @@
 export interface AIAnalysisResult {
-    rawResponse: string;
+    rawResponse: Record<string, any>;
     mileage?: number;
     score?: number;
     feedback?: string;
@@ -20,13 +20,10 @@ class AIAnalyzer {
     async analyzeMeter(imageBuffer: Buffer): Promise<AIAnalysisResult> {
         console.log(`[AIAnalyzer Mock] Analyzing meter image (${imageBuffer.length} bytes)...`);
 
-        // モック実装: ランダムな走行距離を「読み取った」ふりをする
-        // 実際のアプリでの初期テストでは現在のODOより少し増えた値などを返すと良いが、
-        // ここでは単純にランダムな数値を返す（例: 34,200km前後）
         const mockMileage = Math.floor(Math.random() * 500) + 34200;
 
         return {
-            rawResponse: `MOCK_OCR_RESULT: ODO ${mockMileage}`,
+            rawResponse: { type: 'mock_ocr', odo: mockMileage, raw: `MOCK_OCR_RESULT: ODO ${mockMileage}` },
             mileage: mockMileage,
             feedback: "メーターの数値を正常に読み取りました。",
         };
@@ -38,20 +35,50 @@ class AIAnalyzer {
     async analyzeComponent(imageBuffer: Buffer, type: HealthLogType): Promise<AIAnalysisResult> {
         console.log(`[AIAnalyzer Mock] Analyzing ${type} image (${imageBuffer.length} bytes)...`);
 
-        // モック実装: パーツに応じてランダムなスコア(50〜100)とコメントを生成
-        const mockScore = Math.floor(Math.random() * 51) + 50;
+        const mockScore = Math.round((Math.random() * 0.51 + 0.49) * 100) / 100; // 0.49〜1.0
+        const displayScore = Math.round(mockScore * 100);
         let mockFeedback = "状態は概ね良好です。引き続き定期的な点検を行なってください。";
 
-        if (mockScore < 60) {
+        if (mockScore < 0.6) {
             mockFeedback = `警告: ${type} の摩耗が進行しています。早めの交換をお勧めします。`;
-        } else if (mockScore > 90) {
+        } else if (mockScore > 0.9) {
             mockFeedback = `素晴らしい状態です。${type} のコンディションは完璧です。`;
         }
 
         return {
-            rawResponse: `MOCK_AI_VISION: SCORE=${mockScore} FEEDBACK="${mockFeedback}"`,
+            rawResponse: { type: 'mock_vision', component: type, score: mockScore, displayScore, feedback: mockFeedback },
             score: mockScore,
             feedback: mockFeedback,
+        };
+    }
+
+    /**
+     * エンジン音の解析モック
+     * 将来的に音声AI（TensorFlow.js / Google Audio Intelligence API等）に差し替える
+     */
+    async analyzeEngineSound(audioBuffer: Buffer): Promise<AIAnalysisResult> {
+        console.log(`[AIAnalyzer Mock] Analyzing engine sound (${audioBuffer.length} bytes)...`);
+
+        const mockScore = Math.round((Math.random() * 0.51 + 0.49) * 100) / 100; // 0.49〜1.0
+        const displayScore = Math.round(mockScore * 100);
+        let status: string;
+        let mockFeedback: string;
+
+        if (mockScore >= 0.8) {
+            status = '正常';
+            mockFeedback = 'エンジン音は正常です。異常な振動や打音は検出されませんでした。';
+        } else if (mockScore >= 0.6) {
+            status = '注意';
+            mockFeedback = 'エンジン音にわずかな不規則性が検出されました。次回の点検時に確認することをお勧めします。';
+        } else {
+            status = '異常';
+            mockFeedback = '警告: エンジン音に異常なノッキングまたは金属音が検出されました。早急な点検をお勧めします。';
+        }
+
+        return {
+            rawResponse: { type: 'mock_audio', score: mockScore, displayScore, status, feedback: mockFeedback },
+            score: mockScore,
+            feedback: `【${status}】 ${mockFeedback}`,
         };
     }
 }

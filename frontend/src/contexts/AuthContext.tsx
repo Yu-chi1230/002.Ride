@@ -87,29 +87,54 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     useEffect(() => {
         let isMounted = true;
+        let isInitialized = false;
 
-        // Use onAuthStateChange as the single source of truth for session state.
-        // It fires INITIAL_SESSION on mount, so we don't need a separate getSession call.
+        const initializeAuth = async (currentSession: Session | null) => {
+            if (!isMounted) return;
+            isInitialized = true;
+
+            setSession(currentSession);
+            setUser(currentSession?.user ?? null);
+
+            if (currentSession?.user) {
+                // User is logged in, check profile and fetch data
+                const profileResult = await checkProfile(currentSession);
+                if (isMounted) {
+                    setHasProfile(profileResult.hasProfile);
+                    setProfileData(profileResult.data);
+                    setIsLoading(false);
+                }
+            } else {
+                // No user (logged out or no session)
+                setHasProfile(null);
+                setProfileData(null);
+                setIsLoading(false);
+            }
+        };
+
+        // Explicit getSession call in case onAuthStateChange is delayed or doesn't fire INITIAL_SESSION
+        supabase.auth.getSession().then(({ data: { session }, error }) => {
+            if (error) {
+                console.error('[AuthContext] getSession error:', error.message);
+            }
+            if (!isInitialized) {
+                console.log('[AuthContext] getSession resolved before onAuthStateChange');
+                initializeAuth(session);
+            }
+        });
+
         const { data: authListener } = supabase.auth.onAuthStateChange(
-            async (_event, newSession) => {
+            async (event, newSession) => {
                 if (!isMounted) return;
 
-                setSession(newSession);
-                setUser(newSession?.user ?? null);
+                console.log(`[AuthContext] onAuthStateChange event: ${event}`);
 
-                if (newSession?.user) {
-                    // User is logged in, check profile and fetch data
-                    const profileResult = await checkProfile(newSession);
-                    if (isMounted) {
-                        setHasProfile(profileResult.hasProfile);
-                        setProfileData(profileResult.data);
-                        setIsLoading(false);
-                    }
-                } else {
-                    // No user (logged out or initial with no session)
-                    setHasProfile(null);
-                    setProfileData(null);
-                    setIsLoading(false);
+                if (event === 'INITIAL_SESSION' && isInitialized) {
+                    return; // Already initialized by getSession
+                }
+
+                if (!isInitialized || event === 'SIGNED_IN' || event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+                    await initializeAuth(newSession);
                 }
             }
         );

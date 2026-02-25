@@ -50,16 +50,27 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}, toke
         headers,
     };
 
+    // Add a 10s timeout to avoid infinite hanging when the backend is unreachable
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    config.signal = controller.signal;
+
     // URLの構築
     const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
     console.log(`[apiFetch] Executing fetch to URL: ${url}`);
 
     try {
         const response = await fetch(url, config);
+        clearTimeout(timeoutId);
         console.log(`[apiFetch] fetch completed for ${url} with status ${response.status}`);
         return response;
-    } catch (e) {
-        console.error(`[apiFetch] fetch threw an error for ${url}:`, e);
+    } catch (e: any) {
+        clearTimeout(timeoutId);
+        if (e.name === 'AbortError') {
+            console.error(`[apiFetch] Request timed out for ${url}`);
+        } else {
+            console.error(`[apiFetch] fetch threw an error for ${url}:`, e);
+        }
         throw e;
     }
 }

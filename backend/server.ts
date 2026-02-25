@@ -208,7 +208,7 @@ app.post('/api/health/analyze', requireAuth, upload.single('image'), async (req:
                 detected_mileage: analysisResult.mileage,
                 ai_score: analysisResult.score,
                 ai_feedback: analysisResult.feedback,
-                raw_ai_response: analysisResult.rawResponse as any // DB Json format
+                raw_ai_response: analysisResult.rawResponse
             }
         });
 
@@ -224,6 +224,154 @@ app.post('/api/health/analyze', requireAuth, upload.single('image'), async (req:
     } catch (error: any) {
         console.error('Health Analyze API Error:', error);
         res.status(500).json({ error: 'Internal Server Error during health analysis' });
+    }
+});
+
+app.post('/api/health/analyze-audio', requireAuth, upload.single('audio'), async (req: AuthRequest, res: Response) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const userId = req.user.id;
+        const file = req.file;
+
+        if (!file) {
+            return res.status(400).json({ error: 'Audio file is required' });
+        }
+
+        // Get the user's primary vehicle
+        const vehicle = await prisma.vehicles.findFirst({
+            where: { user_id: userId }
+        });
+
+        if (!vehicle) {
+            return res.status(404).json({ error: 'Vehicle not found' });
+        }
+
+        // Run mock AI engine sound analysis
+        const analysisResult = await aiAnalyzer.analyzeEngineSound(file.buffer);
+
+        // Save to health_logs
+        const healthLog = await prisma.health_logs.create({
+            data: {
+                vehicle_id: vehicle.id,
+                log_type: 'engine',
+                media_url: null,
+                ai_score: analysisResult.score,
+                ai_feedback: analysisResult.feedback,
+                raw_ai_response: analysisResult.rawResponse
+            }
+        });
+
+        console.log(`[Health API] Engine sound analysis complete for user: ${userId}`);
+        res.status(200).json({
+            message: 'Engine sound analysis completed',
+            data: {
+                log: healthLog,
+                analysis: analysisResult
+            }
+        });
+
+    } catch (error: any) {
+        console.error('Engine Sound Analysis Error:', error);
+        res.status(500).json({ error: 'Internal Server Error during engine sound analysis' });
+    }
+});
+
+// ===== Explore: ルート生成API =====
+import { generateMockRoute } from './src/services/mockRouteService';
+
+app.post('/api/explore/routes', requireAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const userId = req.user.id;
+        const { time_limit_minutes, latitude, longitude } = req.body;
+
+        if (!time_limit_minutes || latitude == null || longitude == null) {
+            return res.status(400).json({ error: 'time_limit_minutes, latitude, and longitude are required' });
+        }
+
+        // Get the user's primary vehicle
+        const vehicle = await prisma.vehicles.findFirst({
+            where: { user_id: userId }
+        });
+
+        // Generate mock route data
+        const mockData = generateMockRoute(time_limit_minutes, latitude, longitude);
+
+        // Save route to DB
+        const route = await prisma.routes.create({
+            data: {
+                user_id: userId,
+                vehicle_id: vehicle?.id ?? null,
+                title: mockData.title,
+                time_limit_minutes: time_limit_minutes,
+                total_distance_km: mockData.total_distance_km,
+            }
+        });
+
+        // Save waypoints
+        const waypointRecords = await Promise.all(
+            mockData.waypoints.map((wp) =>
+                prisma.waypoints.create({
+                    data: {
+                        route_id: route.id,
+                        latitude: wp.latitude,
+                        longitude: wp.longitude,
+                        order_index: wp.order_index,
+                    }
+                })
+            )
+        );
+
+        // Save cinematic spots
+        const spotRecords = await Promise.all(
+            mockData.cinematic_spots.map((spot) =>
+                prisma.cinematic_spots.create({
+                    data: {
+                        route_id: route.id,
+                        location_name: spot.location_name,
+                        shooting_guide: spot.shooting_guide,
+                        sun_angle_data: spot.sun_angle_data,
+                        latitude: spot.latitude,
+                        longitude: spot.longitude,
+                    }
+                })
+            )
+        );
+
+        console.log(`[Explore API] Route generated for user: ${userId}, route: ${route.id}`);
+        res.status(200).json({
+            message: 'Route generated successfully',
+            data: {
+                route: {
+                    id: route.id,
+                    title: route.title,
+                    time_limit_minutes: route.time_limit_minutes,
+                    total_distance_km: route.total_distance_km,
+                },
+                waypoints: waypointRecords.map((wp) => ({
+                    latitude: wp.latitude,
+                    longitude: wp.longitude,
+                    order_index: wp.order_index,
+                })),
+                cinematic_spots: spotRecords.map((spot) => ({
+                    location_name: spot.location_name,
+                    shooting_guide: spot.shooting_guide,
+                    sun_angle_data: spot.sun_angle_data,
+                    latitude: spot.latitude,
+                    longitude: spot.longitude,
+                })),
+            }
+        });
+
+    } catch (error: any) {
+        console.error('Explore Route Generation Error:', error);
+        res.status(500).json({ error: 'Internal Server Error during route generation' });
     }
 });
 

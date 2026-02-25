@@ -1,0 +1,489 @@
+/* =========================================
+   ExplorePage.css
+   Explore: Set — シネマティックダークテーマ
+   地図フルスクリーン + オーバーレイUI
+========================================= */
+
+.explore-page {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background-color: #0d0d0d;
+    color: #ffffff;
+    font-family: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* ===== Leaflet Map (full-screen) ===== */
+.explore-map-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+}
+
+.explore-map-container .leaflet-container {
+    width: 100%;
+    height: 100%;
+    background: #111;
+}
+
+/* Dark map tiles overlay tint (Invert OSM standard tiles to dark mode) */
+.leaflet-tile-pane {
+    filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+}
+
+/* ===== Top Header Overlay ===== */
+.explore-header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    padding: 1.5rem 1.2rem 1rem;
+    background: linear-gradient(to bottom, rgba(10, 10, 10, 0.85) 0%, rgba(10, 10, 10, 0) 100%);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    animation: fadeIn 0.6s ease-out;
+}
+
+.explore-back-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(30, 30, 35, 0.7);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #fff;
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.explore-back-btn:hover {
+    background: rgba(50, 50, 55, 0.8);
+    border-color: rgba(200, 160, 80, 0.3);
+}
+
+.explore-title {
+    font-size: 1rem;
+    font-weight: 500;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #e6e6e6;
+}
+
+.explore-header-spacer {
+    width: 40px;
+}
+
+/* ===== Bottom Panel Overlay ===== */
+.explore-panel {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    padding: 1.5rem 1.2rem 2rem;
+    background: linear-gradient(to top, rgba(10, 10, 10, 0.95) 0%, rgba(10, 10, 10, 0.7) 60%, rgba(10, 10, 10, 0) 100%);
+    animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
+}
+
+/* ===== Time Selector ===== */
+.time-selector {
+    margin-bottom: 1.2rem;
+}
+
+.time-selector-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    color: #888;
+    text-transform: uppercase;
+    margin-bottom: 0.6rem;
+}
+
+.time-display {
+    display: flex;
+    align-items: baseline;
+    gap: 0.3rem;
+    margin-bottom: 1rem;
+}
+
+.time-value {
+    font-size: 3rem;
+    font-weight: 200;
+    color: #c8a050;
+    line-height: 1;
+    letter-spacing: -0.02em;
+}
+
+.time-unit {
+    font-size: 1rem;
+    font-weight: 300;
+    color: #888;
+}
+
+/* Custom Range Slider */
+.time-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 3px;
+    background: linear-gradient(to right, #c8a050 0%, #c8a050 var(--slider-progress, 0%), #333 var(--slider-progress, 0%), #333 100%);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+}
+
+.time-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #c8a050;
+    cursor: pointer;
+    box-shadow: 0 0 12px rgba(200, 160, 80, 0.5),
+        0 2px 6px rgba(0, 0, 0, 0.3);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.time-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+    box-shadow: 0 0 18px rgba(200, 160, 80, 0.7),
+        0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.time-slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #c8a050;
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 0 12px rgba(200, 160, 80, 0.5);
+}
+
+.time-presets {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 0.5rem;
+}
+
+.time-preset-label {
+    font-size: 0.7rem;
+    color: #666;
+    cursor: pointer;
+    padding: 0.2rem 0.4rem;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.time-preset-label.active {
+    color: #c8a050;
+    font-weight: 500;
+}
+
+.time-preset-label:hover {
+    color: #aaa;
+}
+
+/* ===== Search Route Button ===== */
+.search-route-btn {
+    width: 100%;
+    padding: 0.9rem 1.5rem;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #c8a050 0%, #a4803a 100%);
+    color: #0a0a0a;
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border: none;
+    box-shadow: 0 4px 20px rgba(200, 160, 80, 0.25);
+}
+
+.search-route-btn:hover {
+    background: linear-gradient(135deg, #d4b060 0%, #b89045 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 24px rgba(200, 160, 80, 0.35);
+}
+
+.search-route-btn:active {
+    transform: translateY(1px);
+}
+
+.search-route-btn:disabled {
+    background: #333;
+    color: #666;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+
+.search-route-btn .btn-icon {
+    font-size: 1.1rem;
+}
+
+/* ===== Loading State ===== */
+.search-loading {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.loading-spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(10, 10, 10, 0.3);
+    border-top-color: #0a0a0a;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+/* ===== Result Panel (replaces search panel) ===== */
+.result-panel {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    max-height: 45vh;
+    overflow-y: auto;
+    background: linear-gradient(to top, rgba(10, 10, 10, 0.97) 0%, rgba(10, 10, 10, 0.85) 70%, rgba(10, 10, 10, 0) 100%);
+    padding: 1.5rem 1.2rem 2rem;
+    animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.result-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.result-title {
+    font-size: 1.2rem;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+}
+
+.result-close-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    color: #aaa;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+}
+
+.result-close-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+}
+
+.result-stats {
+    display: flex;
+    gap: 1.2rem;
+    margin-bottom: 1.2rem;
+}
+
+.result-stat {
+    display: flex;
+    flex-direction: column;
+}
+
+.result-stat-value {
+    font-size: 1.4rem;
+    font-weight: 300;
+    color: #c8a050;
+    line-height: 1.1;
+}
+
+.result-stat-label {
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+    color: #666;
+    text-transform: uppercase;
+    margin-top: 0.2rem;
+}
+
+/* ===== Cinematic Spot Cards ===== */
+.spots-section {
+    margin-top: 1rem;
+}
+
+.spots-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    color: #888;
+    text-transform: uppercase;
+    margin-bottom: 0.8rem;
+}
+
+.spot-card {
+    background: rgba(25, 25, 30, 0.8);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+    padding: 0.9rem 1rem;
+    margin-bottom: 0.6rem;
+    transition: all 0.2s ease;
+}
+
+.spot-card:hover {
+    border-color: rgba(200, 160, 80, 0.2);
+    background: rgba(30, 30, 35, 0.9);
+}
+
+.spot-name {
+    font-size: 0.95rem;
+    font-weight: 400;
+    margin-bottom: 0.3rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.spot-name-icon {
+    font-size: 0.8rem;
+}
+
+.spot-guide {
+    font-size: 0.75rem;
+    color: #aaa;
+    line-height: 1.4;
+}
+
+.spot-sun-info {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-top: 0.4rem;
+    font-size: 0.65rem;
+    color: #c8a050;
+}
+
+/* ===== New Search Button ===== */
+.new-search-btn {
+    width: 100%;
+    padding: 0.8rem;
+    margin-top: 0.8rem;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #aaa;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.new-search-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+/* ===== Location Error ===== */
+.location-error {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 1000;
+    text-align: center;
+    padding: 2rem;
+}
+
+.location-error-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.location-error-text {
+    font-size: 0.9rem;
+    color: #aaa;
+    line-height: 1.5;
+    max-width: 280px;
+}
+
+.location-retry-btn {
+    margin-top: 1rem;
+    padding: 0.7rem 1.5rem;
+    border-radius: 10px;
+    background: rgba(200, 160, 80, 0.15);
+    border: 1px solid rgba(200, 160, 80, 0.3);
+    color: #c8a050;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.location-retry-btn:hover {
+    background: rgba(200, 160, 80, 0.25);
+}
+
+/* ===== Animations ===== */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(40px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ===== Scrollbar (result panel) ===== */
+.result-panel::-webkit-scrollbar {
+    width: 3px;
+}
+
+.result-panel::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.result-panel::-webkit-scrollbar-thumb {
+    background: rgba(200, 160, 80, 0.3);
+    border-radius: 2px;
+}
+
+/* ===== BottomNav space adjustment ===== */
+.explore-panel,
+.result-panel {
+    padding-bottom: calc(2rem + 70px);
+}
