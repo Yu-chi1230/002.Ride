@@ -375,6 +375,55 @@ app.post('/api/explore/routes', requireAuth, async (req: AuthRequest, res: Respo
     }
 });
 
+// ===== Explore: ルート詳細取得API =====
+app.get('/api/explore/routes/:id', requireAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const routeId = req.params.id;
+        const userId = req.user.id;
+
+        // Fetch route
+        const route = await prisma.routes.findUnique({
+            where: { id: routeId },
+        });
+
+        if (!route) {
+            return res.status(404).json({ error: 'Route not found' });
+        }
+
+        // Check ownership (optional based on privacy, but safe)
+        if (route.user_id !== userId) {
+            return res.status(403).json({ error: 'Forbidden: You do not own this route' });
+        }
+
+        // Fetch waypoints
+        const waypoints = await prisma.waypoints.findMany({
+            where: { route_id: routeId },
+            orderBy: { order_index: 'asc' },
+        });
+
+        // Fetch cinematic spots
+        const cinematic_spots = await prisma.cinematic_spots.findMany({
+            where: { route_id: routeId },
+        });
+
+        res.status(200).json({
+            message: 'Route details fetched successfully',
+            data: {
+                route,
+                waypoints,
+                cinematic_spots,
+            }
+        });
+    } catch (error: any) {
+        console.error('Explore Route Fetch Error:', error);
+        res.status(500).json({ error: 'Internal Server Error fetching route details' });
+    }
+});
+
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🏍️ Ride backend running on http://0.0.0.0:${PORT}`);
 });

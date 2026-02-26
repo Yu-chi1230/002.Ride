@@ -9,6 +9,7 @@
         "build": "tsc"
     },
     "dependencies": {
+        "@google/genai": "^1.43.0",
         "@prisma/adapter-pg": "^7.4.1",
         "@prisma/client": "^7.4.1",
         "@supabase/supabase-js": "^2.97.0",

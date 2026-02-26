@@ -369,6 +369,14 @@ function ExplorePage() {
                         </div>
                     )}
 
+                    <button
+                        className="search-route-btn"
+                        style={{ marginTop: '1.2rem', marginBottom: '0.5rem' }}
+                        onClick={() => navigate(`/explore/guide/${routeResult.route.id}`)}
+                    >
+                        🏍️ 出発する (Start Route)
+                    </button>
+
                     <button className="new-search-btn" onClick={handleCloseResult}>
                         🔄 別のルートを検索
                     </button>

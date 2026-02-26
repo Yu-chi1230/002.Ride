@@ -1,0 +1,287 @@
+/* =========================================
+   ExploreGuidePage.css
+   Explore: Guide — 走行中ナビゲーションHUD
+========================================= */
+
+.guide-page {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background-color: #0d0d0d;
+    color: #ffffff;
+    font-family: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+/* ===== Leaflet Map (full-screen) ===== */
+.guide-map-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+}
+
+.guide-map-container .leaflet-container {
+    width: 100%;
+    height: 100%;
+    background: #111;
+}
+
+/* Invert OSM standard tiles to dark mode */
+.leaflet-tile-pane {
+    filter: invert(100%) hue-rotate(180deg) brightness(90%) contrast(90%);
+}
+
+/* ユーザー現在地マーカー（パルス効果） */
+.user-location-marker {
+    position: relative;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.user-location-dot {
+    width: 14px;
+    height: 14px;
+    background-color: #4a90e2;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    box-shadow: 0 0 10px rgba(74, 144, 226, 0.8);
+    position: relative;
+    z-index: 2;
+}
+
+.user-location-pulse {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 32px;
+    height: 32px;
+    background-color: rgba(74, 144, 226, 0.4);
+    border-radius: 50%;
+    z-index: 1;
+    animation: pulse 2s infinite ease-out;
+}
+
+/* ===== Top HUD (Head-Up Display) Overlay ===== */
+.guide-hud-top {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    padding: 3.5rem 1.2rem 1.5rem;
+    /* Status bar spacing */
+    background: linear-gradient(to bottom, rgba(10, 10, 10, 0.95) 0%, rgba(10, 10, 10, 0.6) 70%, rgba(10, 10, 10, 0) 100%);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    pointer-events: none;
+    /* Let clicks pass through to map if needed */
+}
+
+/* Notification Panel (Next Spot / Directions) */
+.hud-notification {
+    background: rgba(20, 20, 25, 0.85);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(200, 160, 80, 0.3);
+    border-radius: 16px;
+    padding: 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    animation: slideDown 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    pointer-events: auto;
+    /* Re-enable clicks for the panel itself */
+}
+
+.hud-notification-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.hud-notification-title {
+    font-size: 0.75rem;
+    letter-spacing: 0.15em;
+    color: #c8a050;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.hud-notification-distance {
+    font-size: 1.2rem;
+    font-weight: 300;
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+}
+
+.hud-spot-name {
+    font-size: 1.1rem;
+    font-weight: 400;
+    color: #fff;
+    margin-bottom: 0.2rem;
+}
+
+.hud-spot-guide {
+    font-size: 0.85rem;
+    color: #aaa;
+    line-height: 1.4;
+}
+
+.hud-sun-info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 0.75rem;
+    color: #e6e6e6;
+}
+
+/* Contextual Sun Status (Golden Hour, etc) */
+.sun-status-badge {
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    background: rgba(200, 160, 80, 0.2);
+    color: #c8a050;
+    font-weight: 500;
+}
+
+/* ===== Bottom Controls Overlay ===== */
+.guide-hud-bottom {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    padding: 1.5rem 1.2rem 2.5rem;
+    background: linear-gradient(to top, rgba(10, 10, 10, 0.95) 0%, rgba(10, 10, 10, 0.6) 70%, rgba(10, 10, 10, 0) 100%);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    pointer-events: none;
+}
+
+/* Quick Actions */
+.guide-action-btn {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: rgba(30, 30, 35, 0.85);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #fff;
+    font-size: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    pointer-events: auto;
+}
+
+.guide-action-btn:hover {
+    background: rgba(50, 50, 55, 0.95);
+    transform: scale(1.05);
+}
+
+.btn-end-route {
+    background: rgba(220, 53, 69, 0.15);
+    border-color: rgba(220, 53, 69, 0.3);
+    color: #e45a68;
+}
+
+.btn-end-route:hover {
+    background: rgba(220, 53, 69, 0.25);
+}
+
+/* Speedometer / Quick Stats */
+.guide-stats {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    pointer-events: auto;
+}
+
+.stat-speed-value {
+    font-size: 3.5rem;
+    font-weight: 200;
+    color: #fff;
+    line-height: 1;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+    font-variant-numeric: tabular-nums;
+}
+
+.stat-speed-unit {
+    font-size: 1rem;
+    font-weight: 400;
+    color: #c8a050;
+    letter-spacing: 0.1em;
+    margin-top: -5px;
+}
+
+/* Loading & Error States */
+.guide-loading,
+.guide-error {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: #0d0d0d;
+    z-index: 2000;
+}
+
+.guide-error-text {
+    font-size: 1.1rem;
+    color: #e45a68;
+    margin-bottom: 1.5rem;
+}
+
+.guide-back-btn {
+    padding: 0.8rem 1.5rem;
+    border-radius: 8px;
+    background: #333;
+    color: #fff;
+    border: none;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+/* ===== Animations ===== */
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes pulse {
+    0% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 0.8;
+    }
+
+    100% {
+        transform: translate(-50%, -50%) scale(2.5);
+        opacity: 0;
+    }
+}

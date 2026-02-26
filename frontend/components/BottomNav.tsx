@@ -11,7 +11,6 @@ function BottomNav() {
                 className={`bottom-nav-item ${location.pathname === '/home' ? 'active' : ''}`}
                 onClick={() => navigate('/home')}
             >
-                <span className="bottom-nav-icon">🏠</span>
                 <span className="bottom-nav-label">Home</span>
             </button>
 
@@ -31,7 +30,6 @@ function BottomNav() {
                 className={`bottom-nav-item ${location.pathname === '/settings' ? 'active' : ''}`}
                 onClick={() => navigate('/settings')}
             >
-                <span className="bottom-nav-icon">⚙️</span>
                 <span className="bottom-nav-label">Setting</span>
             </button>
         </nav>

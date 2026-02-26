@@ -61,28 +61,25 @@ function HomePage() {
                             cursor: 'pointer'
                         }}
                     >
-                        Sign Out
+                        サインアウト
                     </button>
                 </header>
 
                 {/* 2. Main Features (3 Cards) */}
                 <main className="home-features">
                     <button className="feature-card health" onClick={() => navigate('/health')}>
-                        <div className="feature-icon">🩺</div>
                         <div className="feature-text">
                             <h3>Health</h3>
                             <p>コンディション診断</p>
                         </div>
                     </button>
                     <button className="feature-card explore" onClick={() => navigate('/explore')}>
-                        <div className="feature-icon">🗺️</div>
                         <div className="feature-text">
                             <h3>Explore</h3>
                             <p>ルートレコメンド</p>
                         </div>
                     </button>
                     <button className="feature-card create" onClick={() => navigate('/create')}>
-                        <div className="feature-icon">🎬</div>
                         <div className="feature-text">
                             <h3>Create</h3>
                             <p>シネマエディター</p>

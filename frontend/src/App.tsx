@@ -4,6 +4,7 @@ import LoginPage from '../pages/LoginPage';
 import HomePage from '../pages/HomePage';
 import HealthPage from '../pages/HealthPage';
 import ExplorePage from '../pages/ExplorePage';
+import ExploreGuidePage from '../pages/ExploreGuidePage';
 import OnboardingPage from '../pages/OnboardingPage';
 import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -24,6 +25,7 @@ function App() {
                     <Route element={<ProtectedRoute />}>
                         <Route path="/home" element={<HomePage />} />
                         <Route path="/explore" element={<ExplorePage />} />
+                        <Route path="/explore/guide/:routeId" element={<ExploreGuidePage />} />
                     </Route>
 
                     {/* Common / Utility Routes */}
