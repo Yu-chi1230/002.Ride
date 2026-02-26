@@ -247,7 +247,6 @@ function ExplorePage() {
                 <button className="explore-back-btn" onClick={() => navigate('/home')}>
                     ←
                 </button>
-                <span className="explore-title">Explore</span>
                 <div className="explore-header-spacer" />
             </div>
 

@@ -280,7 +280,7 @@ app.post('/api/health/analyze-audio', requireAuth, upload.single('audio'), async
 });
 
 // ===== Explore: ルート生成API =====
-import { generateMockRoute } from './src/services/mockRouteService';
+import { suggestCinematicSpotsBase } from './src/services/aiRouteService';
 
 app.post('/api/explore/routes', requireAuth, async (req: AuthRequest, res: Response) => {
     try {
@@ -300,72 +300,108 @@ app.post('/api/explore/routes', requireAuth, async (req: AuthRequest, res: Respo
             where: { user_id: userId }
         });
 
-        // Generate mock route data
-        const mockData = generateMockRoute(time_limit_minutes, latitude, longitude);
+        // 1. Gemini API からスポット提案を取得 (Google Maps API がないため直線距離のモックルートを構築)
+        const proposal = await suggestCinematicSpotsBase(time_limit_minutes, latitude, longitude);
 
-        // Save route to DB
-        const route = await prisma.routes.create({
-            data: {
-                user_id: userId,
-                vehicle_id: vehicle?.id ?? null,
-                title: mockData.title,
-                time_limit_minutes: time_limit_minutes,
-                total_distance_km: mockData.total_distance_km,
-            }
+        // Calculate simple estimated distance and polyline (straight lines between points)
+        let estimatedDistanceKm = 0;
+        const allPoints = [
+            { lat: latitude, lng: longitude },
+            ...proposal.spots.map(s => ({ lat: s.latitude, lng: s.longitude })),
+            { lat: latitude, lng: longitude } // Return trip
+        ];
+
+        for (let i = 0; i < allPoints.length - 1; i++) {
+            estimatedDistanceKm += getDistanceFromLatLonInKm(
+                allPoints[i].lat, allPoints[i].lng,
+                allPoints[i + 1].lat, allPoints[i + 1].lng
+            );
+        }
+        estimatedDistanceKm = Math.round(estimatedDistanceKm * 10) / 10;
+
+        // Waypoints definition (simplified straight-line path for now)
+        const waypointsData = allPoints.map((pt, index) => ({
+            latitude: pt.lat,
+            longitude: pt.lng,
+            order_index: index,
+        }));
+
+        // Cinematic spots mapping
+        const cinematicSpotsData = proposal.spots.map((spot) => ({
+            location_name: spot.location_name,
+            shooting_guide: spot.shooting_guide,
+            sun_angle_data: null, // Default
+            latitude: spot.latitude,
+            longitude: spot.longitude,
+        }));
+
+        // 2. Save routing data to DB using Prisma transaction
+        const result = await prisma.$transaction(async (tx) => {
+            // Create Route
+            const route = await tx.routes.create({
+                data: {
+                    user_id: userId,
+                    vehicle_id: vehicle?.id ?? null,
+                    title: proposal.title,
+                    time_limit_minutes: time_limit_minutes,
+                    total_distance_km: estimatedDistanceKm,
+                }
+            });
+
+            // Create Waypoints
+            const waypointRecords = await Promise.all(
+                waypointsData.map((wp) =>
+                    tx.waypoints.create({
+                        data: {
+                            route_id: route.id,
+                            latitude: wp.latitude,
+                            longitude: wp.longitude,
+                            order_index: wp.order_index,
+                        }
+                    })
+                )
+            );
+
+            // Create Spots
+            const spotRecords = await Promise.all(
+                cinematicSpotsData.map((spot) =>
+                    tx.cinematic_spots.create({
+                        data: {
+                            route_id: route.id,
+                            location_name: spot.location_name,
+                            shooting_guide: spot.shooting_guide,
+                            sun_angle_data: spot.sun_angle_data ? spot.sun_angle_data : undefined,
+                            latitude: spot.latitude,
+                            longitude: spot.longitude,
+                        }
+                    })
+                )
+            );
+
+            return { route, waypointRecords, spotRecords };
         });
 
-        // Save waypoints
-        const waypointRecords = await Promise.all(
-            mockData.waypoints.map((wp) =>
-                prisma.waypoints.create({
-                    data: {
-                        route_id: route.id,
-                        latitude: wp.latitude,
-                        longitude: wp.longitude,
-                        order_index: wp.order_index,
-                    }
-                })
-            )
-        );
-
-        // Save cinematic spots
-        const spotRecords = await Promise.all(
-            mockData.cinematic_spots.map((spot) =>
-                prisma.cinematic_spots.create({
-                    data: {
-                        route_id: route.id,
-                        location_name: spot.location_name,
-                        shooting_guide: spot.shooting_guide,
-                        sun_angle_data: spot.sun_angle_data,
-                        latitude: spot.latitude,
-                        longitude: spot.longitude,
-                    }
-                })
-            )
-        );
-
-        console.log(`[Explore API] Route generated for user: ${userId}, route: ${route.id}`);
+        console.log(`[Explore API] Route generated for user: ${userId}, route: ${result.route.id}`);
         res.status(200).json({
             message: 'Route generated successfully',
             data: {
                 route: {
-                    id: route.id,
-                    title: route.title,
-                    time_limit_minutes: route.time_limit_minutes,
-                    total_distance_km: route.total_distance_km,
+                    id: result.route.id,
+                    title: result.route.title,
+                    time_limit_minutes: result.route.time_limit_minutes,
+                    total_distance_km: result.route.total_distance_km,
                 },
-                waypoints: waypointRecords.map((wp) => ({
+                waypoints: result.waypointRecords.map((wp) => ({
                     latitude: wp.latitude,
                     longitude: wp.longitude,
                     order_index: wp.order_index,
                 })),
-                cinematic_spots: spotRecords.map((spot) => ({
+                cinematic_spots: result.spotRecords.map((spot) => ({
                     location_name: spot.location_name,
                     shooting_guide: spot.shooting_guide,
-                    sun_angle_data: spot.sun_angle_data,
                     latitude: spot.latitude,
                     longitude: spot.longitude,
-                })),
+                }))
             }
         });
 
@@ -423,6 +459,25 @@ app.get('/api/explore/routes/:id', requireAuth, async (req: AuthRequest, res: Re
         res.status(500).json({ error: 'Internal Server Error fetching route details' });
     }
 });
+
+// Helper for distance calculation
+function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+    var R = 6371; // Radius of the earth in km
+    var dLat = deg2rad(lat2 - lat1);  // deg2rad below
+    var dLon = deg2rad(lon2 - lon1);
+    var a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2)
+        ;
+    var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    var d = R * c; // Distance in km
+    return d;
+}
+
+function deg2rad(deg: number) {
+    return deg * (Math.PI / 180)
+}
 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🏍️ Ride backend running on http://0.0.0.0:${PORT}`);

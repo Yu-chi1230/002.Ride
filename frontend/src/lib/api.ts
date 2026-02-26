@@ -50,9 +50,10 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}, toke
         headers,
     };
 
-    // Add a 10s timeout to avoid infinite hanging when the backend is unreachable
+    // Add a 30s timeout to avoid infinite hanging when the backend is unreachable
+    // (Increased from 10s to 30s as AI requests via Gemini can take 10-20 seconds)
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
     config.signal = controller.signal;
 
     // URLの構築
