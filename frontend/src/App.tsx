@@ -6,6 +6,8 @@ import HealthPage from '../pages/HealthPage';
 import ExplorePage from '../pages/ExplorePage';
 import ExploreGuidePage from '../pages/ExploreGuidePage';
 import OnboardingPage from '../pages/OnboardingPage';
+import CreatePage from '../pages/CreatePage';
+import SettingPage from '../pages/SettingPage';
 import { AuthProvider } from './contexts/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import AuthRoute from './components/AuthRoute';
@@ -26,6 +28,8 @@ function App() {
                         <Route path="/home" element={<HomePage />} />
                         <Route path="/explore" element={<ExplorePage />} />
                         <Route path="/explore/guide/:routeId" element={<ExploreGuidePage />} />
+                        <Route path="/create" element={<CreatePage />} />
+                        <Route path="/settings" element={<SettingPage />} />
                     </Route>
 
                     {/* Common / Utility Routes */}

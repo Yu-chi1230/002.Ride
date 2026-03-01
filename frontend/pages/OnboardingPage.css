@@ -177,6 +177,41 @@
     color: var(--color-text-muted);
 }
 
+/* Password Visibility Toggle */
+.onboarding-password-wrapper {
+    position: relative;
+    width: 100%;
+    display: flex;
+    align-items: center;
+}
+
+.onboarding-password-wrapper .onboarding-password-input {
+    padding-right: 48px;
+}
+
+.onboarding-password-toggle {
+    position: absolute;
+    right: 16px;
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.3s ease;
+}
+
+.onboarding-password-toggle:hover {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.onboarding-password-toggle svg {
+    width: 20px;
+    height: 20px;
+}
+
 /* Custom Select Dropdown */
 .custom-select-wrapper {
     position: relative;

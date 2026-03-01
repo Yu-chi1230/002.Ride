@@ -25,17 +25,15 @@ L.Icon.Default.mergeOptions({
 const goldIcon = new L.DivIcon({
     className: '',
     html: `<div style="
-        width: 28px; height: 28px;
-        background: linear-gradient(135deg, #c8a050, #a4803a);
-        border-radius: 50% 50% 50% 0;
-        transform: rotate(-45deg);
-        border: 2px solid #fff;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-        display: flex; align-items: center; justify-content: center;
-    "><span style="transform: rotate(45deg); font-size: 12px;">📸</span></div>`,
-    iconSize: [28, 28],
-    iconAnchor: [14, 28],
-    popupAnchor: [0, -28],
+        width: 14px; height: 14px;
+        background: #0D1117;
+        border: 2px solid #D4AF37;
+        transform: rotate(45deg);
+        box-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
+    "></div>`,
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+    popupAnchor: [0, -10],
 });
 
 // ===== 型定義 =====
@@ -91,8 +89,11 @@ function ExplorePage() {
     const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
     const [locationError, setLocationError] = useState(false);
     const [isSearching, setIsSearching] = useState(false);
-    const [routeResult, setRouteResult] = useState<RouteResult | null>(null);
+    const [routeResults, setRouteResults] = useState<RouteResult[] | null>(null);
+    const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
     const sliderRef = useRef<HTMLInputElement>(null);
+
+    const activeRouteResult = routeResults?.[selectedRouteIndex] ?? null;
 
     // ===== 現在地取得 =====
     const fetchLocation = useCallback(() => {
@@ -123,7 +124,7 @@ function ExplorePage() {
             const progress = ((timeLimit - 30) / (180 - 30)) * 100;
             sliderRef.current.style.setProperty('--slider-progress', `${progress}%`);
         }
-    }, [timeLimit]);
+    }, [timeLimit, userLocation, routeResults]);
 
     // ===== ルート検索 =====
     const handleSearch = async () => {
@@ -140,7 +141,8 @@ function ExplorePage() {
             });
             if (res.ok) {
                 const json = await res.json();
-                setRouteResult(json.data);
+                setRouteResults(json.data.routes || []);
+                setSelectedRouteIndex(0);
             } else {
                 console.error('Route search failed:', res.status);
             }
@@ -153,7 +155,7 @@ function ExplorePage() {
 
     // ===== ルートのポリライン座標 =====
     const polylinePositions: [number, number][] =
-        routeResult?.waypoints
+        activeRouteResult?.waypoints
             ?.sort((a, b) => a.order_index - b.order_index)
             .map((wp) => [wp.latitude, wp.longitude]) ?? [];
 
@@ -172,7 +174,8 @@ function ExplorePage() {
 
     // ===== 結果を閉じる =====
     const handleCloseResult = () => {
-        setRouteResult(null);
+        setRouteResults(null);
+        setSelectedRouteIndex(0);
     };
 
     return (
@@ -194,34 +197,34 @@ function ExplorePage() {
                         <RecenterMap lat={userLocation.lat} lng={userLocation.lng} />
 
                         {/* 到達可能範囲サークル（結果表示前のみ） */}
-                        {!routeResult && (
+                        {routeResults === null && (
                             <Circle
                                 center={[userLocation.lat, userLocation.lng]}
                                 radius={reachRadius}
                                 pathOptions={{
-                                    color: '#c8a050',
-                                    fillColor: '#c8a050',
-                                    fillOpacity: 0.06,
+                                    color: '#D4AF37',
+                                    fillColor: '#D4AF37',
+                                    fillOpacity: 0.05,
                                     weight: 1,
-                                    dashArray: '6 4',
+                                    dashArray: '4 8',
                                 }}
                             />
                         )}
 
                         {/* ルートのポリライン */}
-                        {routeResult && polylinePositions.length > 0 && (
+                        {activeRouteResult && polylinePositions.length > 0 && (
                             <Polyline
                                 positions={polylinePositions}
                                 pathOptions={{
-                                    color: '#c8a050',
+                                    color: '#D4AF37',
                                     weight: 3,
-                                    opacity: 0.9,
+                                    opacity: 0.8,
                                 }}
                             />
                         )}
 
                         {/* 撮影スポットマーカー */}
-                        {routeResult?.cinematic_spots
+                        {activeRouteResult?.cinematic_spots
                             ?.filter((s) => s.latitude && s.longitude)
                             .map((spot, idx) => (
                                 <Marker
@@ -230,9 +233,8 @@ function ExplorePage() {
                                     icon={goldIcon}
                                 >
                                     <Popup>
-                                        <div style={{ color: '#333', fontSize: '0.8rem' }}>
-                                            <strong>{spot.location_name}</strong>
-                                            <br />
+                                        <div style={{ color: '#0D1117', fontSize: '0.85rem', fontFamily: "'Noto Sans JP', sans-serif" }}>
+                                            <strong style={{ display: 'block', marginBottom: '4px' }}>{spot.location_name}</strong>
                                             {spot.shooting_guide}
                                         </div>
                                     </Popup>
@@ -265,12 +267,25 @@ function ExplorePage() {
                 </div>
             )}
 
+            {/* ===== 0件メッセージ ===== */}
+            {routeResults !== null && routeResults.length === 0 && (
+                <div className="explore-panel zero-routes-panel">
+                    <p className="zero-routes-text">
+                        指定された時間内で行けるルートが見つかりませんでした。<br />
+                        制限時間を延長して再検索してください。
+                    </p>
+                    <button className="new-search-btn" onClick={handleCloseResult}>
+                        条件を変えて再検索
+                    </button>
+                </div>
+            )}
+
             {/* ===== 検索パネル (結果がない時) ===== */}
-            {!routeResult && userLocation && (
+            {routeResults === null && userLocation && (
                 <div className="explore-panel">
                     {/* タイムセレクター */}
                     <div className="time-selector">
-                        <div className="time-selector-label">Time Limit</div>
+                        <div className="time-selector-label">TIME LIMIT</div>
                         <div className="time-display">
                             <span className="time-value">{timeDisplay.value}</span>
                             <span className="time-unit">{timeDisplay.unit}</span>
@@ -307,12 +322,11 @@ function ExplorePage() {
                         {isSearching ? (
                             <span className="search-loading">
                                 <span className="loading-spinner" />
-                                ルート検索中…
+                                探索中...
                             </span>
                         ) : (
                             <>
-                                <span className="btn-icon">🗺️</span>
-                                ルートを検索
+                                探索を開始する
                             </>
                         )}
                     </button>
@@ -320,38 +334,60 @@ function ExplorePage() {
             )}
 
             {/* ===== 結果パネル ===== */}
-            {routeResult && (
+            {activeRouteResult && routeResults && (
                 <div className="result-panel">
                     <div className="result-header">
-                        <h2 className="result-title">{routeResult.route.title}</h2>
+                        <h2 className="result-title">ROUTES ({routeResults.length})</h2>
                         <button className="result-close-btn" onClick={handleCloseResult}>
                             ✕
                         </button>
                     </div>
 
+                    {/* ルート一覧カルーセル */}
+                    {routeResults.length > 1 && (
+                        <div className="route-carousel">
+                            {routeResults.map((res, idx) => (
+                                <div
+                                    key={res.route.id}
+                                    className={`carousel-card ${idx === selectedRouteIndex ? 'active' : ''}`}
+                                    onClick={() => setSelectedRouteIndex(idx)}
+                                >
+                                    <div className="carousel-card-title">{res.route.title}</div>
+                                    <div className="carousel-card-stats">
+                                        {res.route.total_distance_km?.toFixed(1) ?? '--'} km / {res.route.time_limit_minutes} min
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    <div className="active-route-title-section">
+                        <h3 className="active-route-title">{activeRouteResult.route.title}</h3>
+                    </div>
+
                     <div className="result-stats">
                         <div className="result-stat">
                             <span className="result-stat-value">
-                                {routeResult.route.total_distance_km?.toFixed(1) ?? '--'}
+                                {activeRouteResult.route.total_distance_km?.toFixed(1) ?? '--'}
                             </span>
                             <span className="result-stat-label">km</span>
                         </div>
                         <div className="result-stat">
                             <span className="result-stat-value">
-                                {routeResult.route.time_limit_minutes}
+                                {activeRouteResult.route.time_limit_minutes}
                             </span>
                             <span className="result-stat-label">min</span>
                         </div>
                     </div>
 
                     {/* 撮影スポット */}
-                    {routeResult.cinematic_spots.length > 0 && (
+                    {activeRouteResult.cinematic_spots.length > 0 && (
                         <div className="spots-section">
-                            <div className="spots-label">📸 Cinematic Spots</div>
-                            {routeResult.cinematic_spots.map((spot, idx) => (
+                            <div className="spots-label">CINEMATIC SPOTS</div>
+                            {activeRouteResult.cinematic_spots.map((spot, idx) => (
                                 <div key={idx} className="spot-card">
                                     <div className="spot-name">
-                                        <span className="spot-name-icon">📍</span>
+                                        <span className="spot-name-icon"></span>
                                         {spot.location_name ?? `スポット ${idx + 1}`}
                                     </div>
                                     {spot.shooting_guide && (
@@ -359,8 +395,8 @@ function ExplorePage() {
                                     )}
                                     {spot.sun_angle_data && (
                                         <div className="spot-sun-info">
-                                            ☀️ 太陽高度 {spot.sun_angle_data.altitude}°
-                                            {spot.sun_angle_data.azimuth && ` / 方位 ${spot.sun_angle_data.azimuth}°`}
+                                            SUN_ALT {spot.sun_angle_data.altitude}°
+                                            {spot.sun_angle_data.azimuth && ` / AZIMUTH ${spot.sun_angle_data.azimuth}°`}
                                         </div>
                                     )}
                                 </div>
@@ -371,13 +407,13 @@ function ExplorePage() {
                     <button
                         className="search-route-btn"
                         style={{ marginTop: '1.2rem', marginBottom: '0.5rem' }}
-                        onClick={() => navigate(`/explore/guide/${routeResult.route.id}`)}
+                        onClick={() => navigate(`/explore/guide/${activeRouteResult.route.id}`)}
                     >
-                        🏍️ 出発する (Start Route)
+                        ナビゲーションを開始
                     </button>
 
                     <button className="new-search-btn" onClick={handleCloseResult}>
-                        🔄 別のルートを検索
+                        条件を変えて再検索
                     </button>
                 </div>
             )}

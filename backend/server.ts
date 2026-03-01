@@ -13,8 +13,10 @@ const PORT = 8001;
 const allowedOrigins = [
     'http://localhost:5173',
     'http://localhost:5174',
+    'http://localhost:5175',
     'http://10.4.6.3:5173',
-    'http://10.4.6.3:5174'
+    'http://10.4.6.3:5174',
+    'http://10.4.6.3:5175'
 ];
 
 app.use(cors({
@@ -98,6 +100,85 @@ app.get('/api/users/me', requireAuth, async (req: AuthRequest, res: Response) =>
     } catch (error) {
         console.error('Error fetching user profile:', error);
         res.status(500).json({ error: 'Internal Server Error' });
+    }
+});
+
+// Update Current User Profile
+app.put('/api/users/me', requireAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const userId = req.user.id;
+        const { first_name, last_name, display_name, vehicle_maker, vehicle_model_name } = req.body;
+
+        const updatedProfile = await prisma.$transaction(async (tx) => {
+            // Update the profile
+            const profile = await tx.profiles.update({
+                where: { id: userId },
+                data: {
+                    first_name: first_name ?? undefined,
+                    last_name: last_name ?? undefined,
+                    display_name: display_name ?? undefined,
+                },
+            });
+
+            // Update the first vehicle (assuming single vehicle per user for now)
+            // Fetch current vehicle to see if one exists
+            let vehicle = await tx.vehicles.findFirst({
+                where: { user_id: userId }
+            });
+
+            if (vehicle && (vehicle_maker !== undefined || vehicle_model_name !== undefined)) {
+                vehicle = await tx.vehicles.update({
+                    where: { id: vehicle.id },
+                    data: {
+                        maker: vehicle_maker ?? undefined,
+                        model_name: vehicle_model_name ?? undefined,
+                    }
+                });
+            }
+
+            return { ...profile, vehicles: vehicle ? [vehicle] : [] };
+        });
+
+        res.json({ message: 'Profile updated successfully', data: updatedProfile });
+    } catch (error) {
+        console.error('Error updating user profile:', error);
+        res.status(500).json({ error: 'Internal Server Error during profile update' });
+    }
+});
+
+// Delete Current User Account
+app.delete('/api/users/me', requireAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const userId = req.user.id;
+        console.log(`[DELETE /api/users/me] Attempting to delete user: ${userId}`);
+
+        // We use the raw SQL connection from pg pool (adapter) to safely delete
+        // the user from the `auth.users` table. Due to FOREIGN KEY ... ON DELETE CASCADE
+        // configured on `public.profiles` and `public.vehicles`, this will automatically
+        // clean up all related user data across both schema.
+
+        const deleteRes = await pool.query('DELETE FROM auth.users WHERE id = $1', [userId]);
+
+        if ((deleteRes.rowCount ?? 0) > 0) {
+            console.log(`[DELETE /api/users/me] Successfully deleted user ${userId}`);
+            res.status(200).json({ message: 'Account deleted successfully' });
+        } else {
+            console.warn(`[DELETE /api/users/me] User ${userId} not found in auth.users`);
+            // Even if not found or already deleted, returning 200 is often safest to clear client state
+            res.status(200).json({ message: 'Account already removed or not found' });
+        }
+
+    } catch (error) {
+        console.error('Error deleting user account:', error);
+        res.status(500).json({ error: 'Internal Server Error during account deletion' });
     }
 });
 
@@ -301,90 +382,91 @@ app.post('/api/explore/routes', requireAuth, async (req: AuthRequest, res: Respo
         });
 
         // 1. Gemini API からスポット提案を取得 (Google Maps API がないため直線距離のモックルートを構築)
-        const proposal = await suggestCinematicSpotsBase(time_limit_minutes, latitude, longitude);
+        const proposalResult = await suggestCinematicSpotsBase(time_limit_minutes, latitude, longitude);
+        const generatedRoutes = proposalResult.routes || [];
 
-        // Calculate simple estimated distance and polyline (straight lines between points)
-        let estimatedDistanceKm = 0;
-        const allPoints = [
-            { lat: latitude, lng: longitude },
-            ...proposal.spots.map(s => ({ lat: s.latitude, lng: s.longitude })),
-            { lat: latitude, lng: longitude } // Return trip
-        ];
+        const savedRoutesData = [];
 
-        for (let i = 0; i < allPoints.length - 1; i++) {
-            estimatedDistanceKm += getDistanceFromLatLonInKm(
-                allPoints[i].lat, allPoints[i].lng,
-                allPoints[i + 1].lat, allPoints[i + 1].lng
-            );
-        }
-        estimatedDistanceKm = Math.round(estimatedDistanceKm * 10) / 10;
+        for (const proposal of generatedRoutes) {
+            // Calculate simple estimated distance and polyline (straight lines between points)
+            let estimatedDistanceKm = 0;
+            const allPoints = [
+                { lat: latitude, lng: longitude },
+                ...proposal.spots.map(s => ({ lat: s.latitude, lng: s.longitude })),
+                { lat: latitude, lng: longitude } // Return trip
+            ];
 
-        // Waypoints definition (simplified straight-line path for now)
-        const waypointsData = allPoints.map((pt, index) => ({
-            latitude: pt.lat,
-            longitude: pt.lng,
-            order_index: index,
-        }));
+            for (let i = 0; i < allPoints.length - 1; i++) {
+                estimatedDistanceKm += getDistanceFromLatLonInKm(
+                    allPoints[i].lat, allPoints[i].lng,
+                    allPoints[i + 1].lat, allPoints[i + 1].lng
+                );
+            }
+            estimatedDistanceKm = Math.round(estimatedDistanceKm * 10) / 10;
 
-        // Cinematic spots mapping
-        const cinematicSpotsData = proposal.spots.map((spot) => ({
-            location_name: spot.location_name,
-            shooting_guide: spot.shooting_guide,
-            sun_angle_data: null, // Default
-            latitude: spot.latitude,
-            longitude: spot.longitude,
-        }));
+            // Waypoints definition (simplified straight-line path for now)
+            const waypointsData = allPoints.map((pt, index) => ({
+                latitude: pt.lat,
+                longitude: pt.lng,
+                order_index: index,
+            }));
 
-        // 2. Save routing data to DB using Prisma transaction
-        const result = await prisma.$transaction(async (tx) => {
-            // Create Route
-            const route = await tx.routes.create({
-                data: {
-                    user_id: userId,
-                    vehicle_id: vehicle?.id ?? null,
-                    title: proposal.title,
-                    time_limit_minutes: time_limit_minutes,
-                    total_distance_km: estimatedDistanceKm,
-                }
+            // Cinematic spots mapping
+            const cinematicSpotsData = proposal.spots.map((spot) => ({
+                location_name: spot.location_name,
+                shooting_guide: spot.shooting_guide,
+                sun_angle_data: null, // Default
+                latitude: spot.latitude,
+                longitude: spot.longitude,
+            }));
+
+            // 2. Save routing data to DB using Prisma transaction
+            const result = await prisma.$transaction(async (tx) => {
+                // Create Route
+                const route = await tx.routes.create({
+                    data: {
+                        user_id: userId,
+                        vehicle_id: vehicle?.id ?? null,
+                        title: proposal.title,
+                        time_limit_minutes: time_limit_minutes,
+                        total_distance_km: estimatedDistanceKm,
+                    }
+                });
+
+                // Create Waypoints
+                const waypointRecords = await Promise.all(
+                    waypointsData.map((wp) =>
+                        tx.waypoints.create({
+                            data: {
+                                route_id: route.id,
+                                latitude: wp.latitude,
+                                longitude: wp.longitude,
+                                order_index: wp.order_index,
+                            }
+                        })
+                    )
+                );
+
+                // Create Spots
+                const spotRecords = await Promise.all(
+                    cinematicSpotsData.map((spot) =>
+                        tx.cinematic_spots.create({
+                            data: {
+                                route_id: route.id,
+                                location_name: spot.location_name,
+                                shooting_guide: spot.shooting_guide,
+                                sun_angle_data: spot.sun_angle_data ? spot.sun_angle_data : undefined,
+                                latitude: spot.latitude,
+                                longitude: spot.longitude,
+                            }
+                        })
+                    )
+                );
+
+                return { route, waypointRecords, spotRecords };
             });
 
-            // Create Waypoints
-            const waypointRecords = await Promise.all(
-                waypointsData.map((wp) =>
-                    tx.waypoints.create({
-                        data: {
-                            route_id: route.id,
-                            latitude: wp.latitude,
-                            longitude: wp.longitude,
-                            order_index: wp.order_index,
-                        }
-                    })
-                )
-            );
-
-            // Create Spots
-            const spotRecords = await Promise.all(
-                cinematicSpotsData.map((spot) =>
-                    tx.cinematic_spots.create({
-                        data: {
-                            route_id: route.id,
-                            location_name: spot.location_name,
-                            shooting_guide: spot.shooting_guide,
-                            sun_angle_data: spot.sun_angle_data ? spot.sun_angle_data : undefined,
-                            latitude: spot.latitude,
-                            longitude: spot.longitude,
-                        }
-                    })
-                )
-            );
-
-            return { route, waypointRecords, spotRecords };
-        });
-
-        console.log(`[Explore API] Route generated for user: ${userId}, route: ${result.route.id}`);
-        res.status(200).json({
-            message: 'Route generated successfully',
-            data: {
+            savedRoutesData.push({
                 route: {
                     id: result.route.id,
                     title: result.route.title,
@@ -402,6 +484,14 @@ app.post('/api/explore/routes', requireAuth, async (req: AuthRequest, res: Respo
                     latitude: spot.latitude,
                     longitude: spot.longitude,
                 }))
+            });
+        }
+
+        console.log(`[Explore API] Routes generated for user: ${userId}, count: ${savedRoutesData.length}`);
+        res.status(200).json({
+            message: 'Routes generated successfully',
+            data: {
+                routes: savedRoutesData
             }
         });
 
@@ -457,6 +547,75 @@ app.get('/api/explore/routes/:id', requireAuth, async (req: AuthRequest, res: Re
     } catch (error: any) {
         console.error('Explore Route Fetch Error:', error);
         res.status(500).json({ error: 'Internal Server Error fetching route details' });
+    }
+});
+
+// ===== Create: シネマティック動画生成（モック）API =====
+import { generateCinematicScript } from './src/services/aiCreateService';
+
+app.post('/api/create/generate', requireAuth, upload.array('images', 10), async (req: AuthRequest, res: Response) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const userId = req.user.id;
+        const theme = req.body.theme as string;
+        const files = req.files as Express.Multer.File[];
+
+        if (!theme || !files || files.length === 0) {
+            return res.status(400).json({ error: 'Theme and at least one image are required' });
+        }
+
+        console.log(`[Create API] Generating script for ${userId}, theme: ${theme}, images: ${files.length}`);
+
+        // 1. Geminiでテーマに沿ったスクリプト（字幕）とカラーロジックを生成
+        const scriptResult = await generateCinematicScript(theme, files.length);
+
+        // 2. DB保存 (creations, cinematic_details)
+        // 本来はS3等に画像をアップロードしてURLを取得しますが、今回はMVPモックとしてスキップし
+        // 最初の画像を代表としてダミーURLを入れます（実際の画像表示はフロントエンドのローカルURL等で行う想定）
+        const mockMediaUrl = `mock_generated_video_${Date.now()}.mp4`;
+
+        const creation = await prisma.$transaction(async (tx) => {
+            const newCreation = await tx.creations.create({
+                data: {
+                    user_id: userId,
+                    raw_media_url: 'multiple_images_upload', // 本来は元ファイルのS3 URLなど
+                    processed_media_url: mockMediaUrl,
+                    aspect_ratio: '2.35:1',
+                }
+            });
+
+            await tx.cinematic_details.create({
+                data: {
+                    creation_id: newCreation.id,
+                    color_logic_memo: scriptResult.color_logic_memo,
+                    // narration_script などのカラムがprismaに存在する場合はここに保存
+                    // schema上は narration_script String?等がある前提。無い場合は json カラムなどを利用するか適当に保存
+                    narration_script: JSON.stringify(scriptResult.script_lines)
+                }
+            });
+
+            return newCreation;
+        });
+
+        console.log(`[Create API] Successfully generated for user: ${userId}, creation: ${creation.id}`);
+
+        // 3. クライアントに結果を返す
+        res.status(200).json({
+            message: 'Cinematic slideshow generated successfully',
+            data: {
+                creation_id: creation.id,
+                theme: theme,
+                color_logic_memo: scriptResult.color_logic_memo,
+                script_lines: scriptResult.script_lines,
+            }
+        });
+
+    } catch (error: any) {
+        console.error('Create Generation API Error:', error);
+        res.status(500).json({ error: 'Internal Server Error during cinematic generation' });
     }
 });
 

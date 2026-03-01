@@ -8,20 +8,23 @@
     width: 100vw;
     height: 100vh;
     overflow: hidden;
-    background-color: #0d0d0d;
-    color: #ffffff;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background-color: #0D1117;
+    /* ディープミッドナイト */
+    color: #E6EDF3;
+    /* オフホワイト */
+    font-family: 'Inter', 'Roboto Mono', 'Noto Sans JP', system-ui, -apple-system, sans-serif;
 }
 
-/* Background Effect (シネマティックな暗がりとわずかな光) */
+/* Background Effect (シネマティックな暗がりとわずかな光、愛車の写真が主役) */
 .home-bg {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background: radial-gradient(circle at 50% 30%, rgba(200, 160, 80, 0.08) 0%, rgba(0, 0, 0, 0) 60%),
-        radial-gradient(circle at 50% 100%, rgba(13, 13, 13, 1) 0%, rgba(20, 20, 22, 1) 100%);
+    /* 仮の愛車画像を背景に置き、下に向かって背景色と馴染ませる */
+    background: linear-gradient(to bottom, rgba(13, 17, 23, 0.1) 0%, rgba(13, 17, 23, 0.9) 60%, rgba(13, 17, 23, 1) 100%),
+        url('/assets/Default_background_image.jpg') center top / cover no-repeat;
     z-index: 1;
 }
 
@@ -31,7 +34,7 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    padding: 2rem 1.5rem;
+    padding: 2.5rem 1.5rem;
     box-sizing: border-box;
 }
 
@@ -39,7 +42,7 @@
 .home-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
     margin-bottom: 2rem;
     animation: fadeIn 1s ease-out;
 }
@@ -51,37 +54,20 @@
 
 .vehicle-name {
     margin: 0;
-    font-size: 1.5rem;
+    font-size: 1.6rem;
     font-weight: 300;
-    letter-spacing: 0.05em;
-    color: #e6e6e6;
+    letter-spacing: 0.08em;
+    color: #E6EDF3;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
 }
 
 .vehicle-odo {
-    font-size: 0.8rem;
-    color: #888888;
-    margin-top: 0.2rem;
-    font-family: monospace;
-}
-
-.health-block {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-}
-
-.health-label {
-    font-size: 0.65rem;
-    letter-spacing: 0.1em;
-    color: #c8a050;
-    /* ゴールドアクセント */
-}
-
-.health-score {
-    font-size: 2rem;
-    font-weight: 200;
-    color: #ffffff;
-    line-height: 1;
+    font-size: 0.85rem;
+    color: #8B949E;
+    /* セカンダリグレー */
+    margin-top: 0.4rem;
+    font-family: 'Roboto Mono', monospace;
+    letter-spacing: 0.05em;
 }
 
 /* 2. Main Features (3 Cards - Horizontal Layout) */
@@ -91,132 +77,173 @@
     flex-direction: row;
     justify-content: space-between;
     align-items: center;
-    gap: 0.5rem;
+    gap: 0.8rem;
     position: relative;
     animation: scaleIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
-    margin-bottom: 2rem;
+    margin-bottom: 2.5rem;
 }
 
 .feature-card {
-    background: rgba(20, 20, 22, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 16px;
-    padding: 1rem 0.5rem;
+    background: rgba(13, 17, 23, 0.5);
+    /* Semi-transparent dark for glassmorphism */
+    backdrop-filter: blur(8px);
+    /* Blur effect */
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    /* Subtle glass edge */
+    border-radius: 8px;
+    /* Slightly rounder for glass effect */
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    /* 深めのドロップシャドウ */
+    padding: 1.2rem 0.5rem;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    color: white;
+    color: #E6EDF3;
     text-align: center;
     cursor: pointer;
     transition: all 0.3s ease;
-    backdrop-filter: blur(10px);
     flex: 1;
-    /* 横幅を均等に分ける */
-    aspect-ratio: 1 / 1;
-    /* 正方形に近い形にする */
 }
 
 .feature-card:hover {
-    background: rgba(40, 40, 45, 0.8);
-    transform: translateY(-2px);
-    border-color: rgba(200, 160, 80, 0.3);
+    background: rgba(13, 17, 23, 0.7);
+    border-color: rgba(212, 175, 55, 0.3);
+    /* Subtle gold edge on hover */
+    transform: translateY(-4px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
 }
 
 .feature-card:active {
     transform: translateY(1px);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
 }
 
 .feature-icon {
     font-size: 2rem;
-    margin-bottom: 0.8rem;
+    margin-bottom: 1rem;
     display: flex;
     justify-content: center;
-    filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.1));
+    color: #8B949E;
+    transition: color 0.3s ease;
+}
+
+.feature-card:hover .feature-icon {
+    color: #D4AF37;
 }
 
 .feature-text h3 {
-    margin: 0 0 0.2rem 0;
+    margin: 0 0 0.3rem 0;
     font-size: 0.9rem;
-    font-weight: 500;
+    font-weight: 400;
     letter-spacing: 0.05em;
-    color: #ffffff;
+    color: #E6EDF3;
 }
 
 .feature-text p {
     margin: 0;
-    font-size: 0.6rem;
-    color: #aaaaaa;
-    line-height: 1.2;
+    font-size: 0.65rem;
+    color: #8B949E;
+    letter-spacing: 0.05em;
 }
 
 /* 3. Recommend Route Card */
 .home-recommend {
-    margin-bottom: 2rem;
-    /* BottomNavのスペースを確保するため余白を少し調整 */
+    margin-top: auto;
+    margin-bottom: calc(70px - 1.5rem);
+    /* BottomNav height adjustment so it sits right above it */
     animation: fadeInUp 0.8s ease-out 0.4s both;
 }
 
 .section-title {
     font-size: 0.7rem;
-    color: #888;
-    letter-spacing: 0.1em;
-    margin-bottom: 0.8rem;
+    color: #8B949E;
+    letter-spacing: 0.15em;
+    margin-bottom: 1rem;
     text-transform: uppercase;
 }
 
 .route-card {
     position: relative;
-    border-radius: 16px;
+    border-radius: 4px;
+    /* 極小角丸 */
     overflow: hidden;
-    height: 120px;
+    height: 140px;
+    /* 2.35:1 に近い比率を意識した高さ */
     display: flex;
     align-items: flex-end;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    background: #161618;
+    border: none;
+    background: #161B22;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    cursor: pointer;
+    transition: transform 0.3s ease;
+}
+
+.route-card:hover {
+    transform: scale(1.02);
 }
 
 .route-card-bg {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    /* 仮のグラデーション背景。将来的に画像のURLなどを指定 */
-    background: linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, #000000 100%),
-        linear-gradient(135deg, #1a1a1c 0%, #2a2a2d 100%);
-    opacity: 0.6;
+    inset: 0;
+    /* シネマティックな画像のプレースホルダー */
+    background: linear-gradient(to top, rgba(13, 17, 23, 0.9) 0%, rgba(13, 17, 23, 0.2) 100%),
+        url('https://images.unsplash.com/photo-1623055406086-630ad82791cc?w=800&q=80') center center / cover no-repeat;
 }
 
 .route-card-content {
     position: relative;
     z-index: 2;
-    padding: 1rem;
+    padding: 1.2rem;
     width: 100%;
 }
 
 .route-duration {
     display: inline-block;
-    background: #c8a050;
-    color: #000;
+    background: transparent;
+    border: 1px solid #D4AF37;
+    color: #D4AF37;
     font-size: 0.65rem;
-    font-weight: 700;
-    padding: 0.2rem 0.5rem;
-    border-radius: 4px;
-    margin-bottom: 0.4rem;
+    font-weight: 400;
+    letter-spacing: 0.1em;
+    padding: 0.2rem 0.6rem;
+    border-radius: 2px;
+    margin-bottom: 0.6rem;
 }
 
 .route-title {
-    margin: 0 0 0.2rem 0;
-    font-size: 1.1rem;
+    margin: 0 0 0.3rem 0;
+    font-size: 1.2rem;
     font-weight: 400;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.05em;
+    color: #E6EDF3;
 }
 
 .route-desc {
     margin: 0;
     font-size: 0.75rem;
-    color: #aaaaaa;
+    color: #8B949E;
+    letter-spacing: 0.05em;
+}
+
+/* Auth Buttons etc */
+.sign-out-btn {
+    background: transparent;
+    border: 1px solid rgba(139, 148, 158, 0.4);
+    color: #D4AF37;
+    padding: 6px 14px;
+    border-radius: 4px;
+    /* 極小角丸 */
+    font-size: 0.75rem;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    transition: all 0.2s;
+}
+
+.sign-out-btn:hover {
+    border-color: #E6EDF3;
+    color: #E6EDF3;
 }
 
 /* Animations */
@@ -233,7 +260,7 @@
 @keyframes scaleIn {
     from {
         opacity: 0;
-        transform: scale(0.9);
+        transform: scale(0.95);
     }
 
     to {
@@ -252,4 +279,22 @@
         opacity: 1;
         transform: translateY(0);
     }
+}
+
+/* 4. Top Bar & Logo */
+.home-text-logo {
+    font-size: 1.8rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: #E6EDF3;
+    text-shadow:
+        0 0 15px rgba(212, 175, 55, 0.4),
+        0 0 30px rgba(212, 175, 55, 0.15);
+    line-height: 1;
+    user-select: none;
+    margin: 0;
+}
+
+.home-text-logo-accent {
+    color: #D4AF37;
 }

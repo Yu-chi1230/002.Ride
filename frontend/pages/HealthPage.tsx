@@ -247,21 +247,21 @@ function HealthPage() {
                         className={`mode-btn ${currentMode === 'audio' ? 'active' : ''}`}
                         onClick={() => setCurrentMode('audio')}
                     >
-                        🎙️ Engine Sound
+                        エンジン診断
                     </button>
                     <button
                         className={`mode-btn ${currentMode === 'camera' ? 'active' : ''}`}
                         onClick={() => setCurrentMode('camera')}
                     >
-                        📸 Visual Check
+                        目視点検
                     </button>
                 </div>
 
                 {/* ==================== Engine Sound Section ==================== */}
                 <section className={`audio-section ${currentMode === 'audio' ? 'active-section' : 'inactive-section'}`}>
                     <div className="audio-instruction">
-                        <h3>Listen to the Heartbeat</h3>
-                        <p>エンジンを始動し、録音ボタンを押してください（{RECORDING_DURATION}秒間録音）</p>
+                        <h3>HEARTBEAT</h3>
+                        <p>エンジンを始動し、録音ボタンを押してください</p>
                     </div>
 
                     {/* リアルタイム波形 */}
@@ -288,67 +288,55 @@ function HealthPage() {
 
                     {/* カウントダウン */}
                     {isRecording && (
-                        <p className="recording-status">Recording... ({recordingTime}s)</p>
+                        <p className="recording-status">RECORDING... ({recordingTime}S)</p>
                     )}
 
                     {/* 録音済みプレビュー */}
                     {audioUrl && !isRecording && (
-                        <div style={{ marginTop: '1.5rem', textAlign: 'center', width: '100%' }}>
-                            <p style={{ color: '#888', fontSize: '0.85rem', marginBottom: '0.5rem' }}>録音完了 ✅ タップで再生</p>
-                            <audio controls src={audioUrl} style={{ width: '100%', maxWidth: '300px' }} />
+                        <div style={{ marginTop: '2rem', textAlign: 'center', width: '100%' }}>
+                            <audio controls src={audioUrl} style={{ width: '100%', maxWidth: '300px', marginBottom: '1rem', outline: 'none' }} />
+
 
                             <button
                                 onClick={handleAnalyzeAudio}
                                 disabled={isAnalyzingAudio}
+                                className="minimal-btn-primary"
                                 style={{
-                                    display: 'block',
-                                    margin: '1rem auto 0',
-                                    width: '100%',
                                     maxWidth: '300px',
-                                    padding: '1rem',
-                                    backgroundColor: isAnalyzingAudio ? '#555' : '#c8a050',
-                                    color: isAnalyzingAudio ? '#aaa' : '#000',
-                                    border: 'none',
-                                    borderRadius: '50px',
-                                    fontWeight: 'bold',
-                                    fontSize: '1.1rem',
-                                    cursor: isAnalyzingAudio ? 'not-allowed' : 'pointer'
+                                    margin: '0 auto'
                                 }}
                             >
-                                {isAnalyzingAudio ? 'Analyzing...' : '🔍 エンジン音を解析'}
+                                {isAnalyzingAudio ? '解析中...' : '診断を開始する'}
                             </button>
                         </div>
                     )}
 
                     {/* エンジン音解析結果 */}
                     {engineResult && (
-                        <div className="analysis-result fade-in" style={{
-                            marginTop: '2rem',
-                            padding: '1.5rem',
-                            width: '100%',
-                            backgroundColor: '#111',
-                            border: `1px solid ${engineResult.score && engineResult.score < 0.6 ? '#ff4444' : '#c8a050'}`,
-                            borderRadius: '12px'
+                        <div className="analysis-result fade-in analysis-result-card" style={{
+                            borderTop: `2px solid ${engineResult.score && engineResult.score < 0.6 ? '#E5534B' : '#D4AF37'}`
                         }}>
-                            <h4 style={{ color: '#c8a050', marginBottom: '1rem', fontSize: '1.2rem' }}>Engine Analysis Complete</h4>
+                            <h4 style={{ color: '#D4AF37', marginBottom: '1.5rem', fontSize: '1.1rem', fontWeight: 300, letterSpacing: '0.1em' }}>DIAGNOSTIC REPORT</h4>
 
                             {engineResult.score !== undefined && (
-                                <div style={{ marginBottom: '1rem' }}>
-                                    <span style={{ color: '#aaa', fontSize: '0.9rem' }}>Engine Health Score:</span>
+                                <div style={{ marginBottom: '1.5rem' }}>
+                                    <span style={{ color: '#8B949E', fontSize: '0.85rem', letterSpacing: '0.05em' }}>エンジン健康度 (Health Score)</span>
                                     <p style={{
-                                        fontSize: '2rem',
-                                        fontWeight: 'bold',
-                                        color: engineResult.score >= 0.8 ? '#00ffd5' : engineResult.score >= 0.6 ? '#ffeb3b' : '#ff4444'
+                                        fontSize: '2.5rem',
+                                        fontWeight: '300',
+                                        color: engineResult.score >= 0.8 ? '#E6EDF3' : engineResult.score >= 0.6 ? '#D4AF37' : '#E5534B',
+                                        fontFamily: "'Roboto Mono', monospace",
+                                        marginTop: '0.2rem'
                                     }}>
-                                        {Math.round(engineResult.score * 100)} / 100
+                                        {Math.round(engineResult.score * 100)} <span style={{ fontSize: '1rem', color: '#8B949E' }}>/ 100</span>
                                     </p>
                                 </div>
                             )}
 
                             {engineResult.feedback && (
                                 <div>
-                                    <span style={{ color: '#aaa', fontSize: '0.9rem' }}>診断結果:</span>
-                                    <p style={{ lineHeight: '1.5', marginTop: '0.5rem' }}>{engineResult.feedback}</p>
+                                    <span style={{ color: '#8B949E', fontSize: '0.85rem', letterSpacing: '0.05em' }}>AI所見 (Feedback)</span>
+                                    <p style={{ lineHeight: '1.8', margin: '0.5rem 0 0 0', fontWeight: 300, fontSize: '0.95rem' }}>{engineResult.feedback}</p>
                                 </div>
                             )}
                         </div>
@@ -358,31 +346,23 @@ function HealthPage() {
                 {/* ==================== Visual Check Section ==================== */}
                 <section className={`camera-section ${currentMode === 'camera' ? 'active-section' : 'inactive-section'}`}>
                     <div className="camera-instruction">
-                        <h3>Visual Inspection</h3>
-                        <p>対象パーツを選択し、撮影またはギャラリーから画像を選んでください</p>
+                        <h3>VISUAL INSPECTION</h3>
+                        <p>対象パーツを選択し、画像をアップロードしてください</p>
                     </div>
 
-                    <div className="inspection-form">
-                        <div className="form-group" style={{ marginBottom: '1rem' }}>
-                            <label style={{ color: '#aaa', fontSize: '0.9rem', display: 'block', marginBottom: '0.5rem' }}>Select Target Component</label>
+                    <div className="inspection-form" style={{ width: '100%', maxWidth: '400px', margin: '0 auto' }}>
+                        <div className="form-group" style={{ marginBottom: '2rem' }}>
+                            <label style={{ color: '#8B949E', fontSize: '0.85rem', display: 'block', marginBottom: '0.8rem', letterSpacing: '0.05em' }}>点検箇所の選択 (Target Component)</label>
                             <select
                                 value={logType}
                                 onChange={(e) => setLogType(e.target.value as any)}
-                                style={{
-                                    width: '100%',
-                                    padding: '0.8rem',
-                                    backgroundColor: '#222',
-                                    color: '#fff',
-                                    border: '1px solid #444',
-                                    borderRadius: '8px',
-                                    fontSize: '1rem'
-                                }}
+                                className="minimal-select"
                             >
                                 <option value="meter">メーター (ODO / Mileage)</option>
-                                <option value="tire">タイヤ</option>
-                                <option value="chain">ドライブチェーン</option>
-                                <option value="plug">スパークプラグ</option>
-                                <option value="engine">エンジンブロック</option>
+                                <option value="tire">タイヤ (Tire)</option>
+                                <option value="chain">ドライブチェーン (Chain)</option>
+                                <option value="plug">スパークプラグ (Spark Plug)</option>
+                                <option value="engine">エンジンブロック (Engine Block)</option>
                             </select>
                         </div>
 
@@ -415,18 +395,16 @@ function HealthPage() {
                                             setAnalysisResult(null);
                                         }}
                                     >
-                                        🔄 撮り直す / 再選択
+                                        再撮影・別画像を選択する
                                     </button>
                                 </div>
                             ) : (
                                 <div className="image-source-selector">
                                     <label htmlFor="health-camera-capture" className="source-btn">
-                                        <span className="source-icon">📷</span>
-                                        <span className="source-label">カメラで撮影</span>
+                                        <span className="source-label">カメラで撮影を起動</span>
                                     </label>
                                     <label htmlFor="health-gallery-upload" className="source-btn">
-                                        <span className="source-icon">🖼️</span>
-                                        <span className="source-label">ギャラリーから選択</span>
+                                        <span className="source-label">ギャラリーから画像を選択</span>
                                     </label>
                                 </div>
                             )}
@@ -434,62 +412,51 @@ function HealthPage() {
 
                         {previewUrl && (
                             <button
-                                className="analyze-btn"
+                                className="analyze-btn minimal-btn-primary"
                                 onClick={handleAnalyze}
                                 disabled={isAnalyzing}
-                                style={{
-                                    width: '100%',
-                                    padding: '1rem',
-                                    backgroundColor: isAnalyzing ? '#555' : '#00ffd5',
-                                    color: isAnalyzing ? '#aaa' : '#000',
-                                    border: 'none',
-                                    borderRadius: '50px',
-                                    fontWeight: 'bold',
-                                    fontSize: '1.1rem',
-                                    cursor: isAnalyzing ? 'not-allowed' : 'pointer'
-                                }}
                             >
-                                {isAnalyzing ? 'Analyzing...' : '🔍 Run AI Analysis'}
+                                {isAnalyzing ? '解析中...' : 'AIによる診断を開始する'}
                             </button>
                         )}
                     </div>
 
                     {/* Result Display Area */}
                     {analysisResult && (
-                        <div className="analysis-result fade-in" style={{
-                            marginTop: '2rem',
-                            padding: '1.5rem',
-                            backgroundColor: '#111',
-                            border: `1px solid ${analysisResult.score && analysisResult.score < 0.6 ? '#ff4444' : '#00ffd5'}`,
-                            borderRadius: '12px'
+                        <div className="analysis-result fade-in analysis-result-card" style={{
+                            borderTop: `2px solid ${analysisResult.score && analysisResult.score < 0.6 ? '#E5534B' : '#D4AF37'}`
                         }}>
-                            <h4 style={{ color: '#00ffd5', marginBottom: '1rem', fontSize: '1.2rem' }}>Analysis Complete</h4>
+                            <h4 style={{ color: '#D4AF37', marginBottom: '1.5rem', fontSize: '1.1rem', fontWeight: 300, letterSpacing: '0.1em' }}>ANALYSIS REPORT</h4>
 
                             {analysisResult.mileage !== undefined && (
-                                <div style={{ marginBottom: '1rem' }}>
-                                    <span style={{ color: '#aaa', fontSize: '0.9rem' }}>Detected ODO:</span>
-                                    <p style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>{analysisResult.mileage.toLocaleString()} km</p>
-                                    <p style={{ color: '#888', fontSize: '0.8rem' }}>(Your vehicle mileage was automatically updated)</p>
+                                <div style={{ marginBottom: '1.5rem' }}>
+                                    <span style={{ color: '#8B949E', fontSize: '0.85rem', letterSpacing: '0.05em' }}>検出された走行距離 (Mileage)</span>
+                                    <p style={{ fontSize: '2rem', fontWeight: '300', fontFamily: "'Roboto Mono', monospace", marginTop: '0.2rem' }}>
+                                        {analysisResult.mileage.toLocaleString()} <span style={{ fontSize: '1rem', color: '#8B949E' }}>km</span>
+                                    </p>
+                                    <p style={{ color: '#8B949E', fontSize: '0.8rem', marginTop: '0.2rem' }}>※メーター情報は自動的に更新されました</p>
                                 </div>
                             )}
 
                             {analysisResult.score !== undefined && (
-                                <div style={{ marginBottom: '1rem' }}>
-                                    <span style={{ color: '#aaa', fontSize: '0.9rem' }}>Health Score:</span>
+                                <div style={{ marginBottom: '1.5rem' }}>
+                                    <span style={{ color: '#8B949E', fontSize: '0.85rem', letterSpacing: '0.05em' }}>パーツ健康度 (Health Score)</span>
                                     <p style={{
-                                        fontSize: '2rem',
-                                        fontWeight: 'bold',
-                                        color: analysisResult.score >= 0.9 ? '#00ffd5' : analysisResult.score >= 0.6 ? '#ffeb3b' : '#ff4444'
+                                        fontSize: '2.5rem',
+                                        fontWeight: '300',
+                                        color: analysisResult.score >= 0.8 ? '#E6EDF3' : analysisResult.score >= 0.6 ? '#D4AF37' : '#E5534B',
+                                        fontFamily: "'Roboto Mono', monospace",
+                                        marginTop: '0.2rem'
                                     }}>
-                                        {Math.round(analysisResult.score * 100)} / 100
+                                        {Math.round(analysisResult.score * 100)} <span style={{ fontSize: '1rem', color: '#8B949E' }}>/ 100</span>
                                     </p>
                                 </div>
                             )}
 
                             {analysisResult.feedback && (
                                 <div>
-                                    <span style={{ color: '#aaa', fontSize: '0.9rem' }}>Diagnostic Feedback:</span>
-                                    <p style={{ lineHeight: '1.5', marginTop: '0.5rem' }}>{analysisResult.feedback}</p>
+                                    <span style={{ color: '#8B949E', fontSize: '0.85rem', letterSpacing: '0.05em' }}>AI所見 (Feedback)</span>
+                                    <p style={{ lineHeight: '1.8', margin: '0.5rem 0 0 0', fontWeight: 300, fontSize: '0.95rem' }}>{analysisResult.feedback}</p>
                                 </div>
                             )}
                         </div>

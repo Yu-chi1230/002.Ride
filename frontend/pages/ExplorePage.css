@@ -9,9 +9,13 @@
     width: 100vw;
     height: 100vh;
     overflow: hidden;
-    background-color: #0d0d0d;
-    color: #ffffff;
-    font-family: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif;
+    background-color: #0D1117;
+    /* Deep Midnight */
+    color: #E6EDF3;
+    /* Off White */
+    font-family: 'Noto Sans JP', 'Inter', sans-serif;
+    letter-spacing: 0.05em;
+    /* 洗練さを出すために少し広め */
 }
 
 /* ===== Leaflet Map (full-screen) ===== */
@@ -27,7 +31,7 @@
 .explore-map-container .leaflet-container {
     width: 100%;
     height: 100%;
-    background: #111;
+    background: #0D1117;
 }
 
 /* Dark map tiles overlay tint (Invert OSM standard tiles to dark mode) */
@@ -43,7 +47,7 @@
     right: 0;
     z-index: 1000;
     padding: 1.5rem 1.2rem 1rem;
-    background: linear-gradient(to bottom, rgba(10, 10, 10, 0.85) 0%, rgba(10, 10, 10, 0) 100%);
+    background: linear-gradient(to bottom, rgba(13, 17, 23, 0.95) 0%, rgba(13, 17, 23, 0) 100%);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -53,11 +57,13 @@
 .explore-back-btn {
     width: 40px;
     height: 40px;
-    border-radius: 50%;
-    background: rgba(30, 30, 35, 0.7);
+    border-radius: 4px;
+    /* 最小限の角丸 */
+    background: rgba(22, 27, 34, 0.7);
+    /* Card background */
     backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    color: #fff;
+    color: #E6EDF3;
     font-size: 1.2rem;
     display: flex;
     align-items: center;
@@ -67,8 +73,9 @@
 }
 
 .explore-back-btn:hover {
-    background: rgba(50, 50, 55, 0.8);
-    border-color: rgba(200, 160, 80, 0.3);
+    background: rgba(22, 27, 34, 0.9);
+    border-color: #D4AF37;
+    /* Antique Gold */
 }
 
 .explore-title {
@@ -87,12 +94,22 @@
 .explore-panel {
     position: absolute;
     bottom: 0;
+    /* Align to the very bottom, but padding makes space for BottomNav */
     left: 0;
     right: 0;
-    z-index: 1000;
-    padding: 1.5rem 1.2rem 2rem;
-    background: linear-gradient(to top, rgba(10, 10, 10, 0.95) 0%, rgba(10, 10, 10, 0.7) 60%, rgba(10, 10, 10, 0) 100%);
+    z-index: 10;
+    /* Lower than BottomNav (100) */
+    padding: 1.5rem 1.2rem calc(2rem + 70px);
+    /* 70px is BottomNav height */
+    background: linear-gradient(to top, rgba(13, 17, 23, 1) 0%, rgba(13, 17, 23, 0.8) 60%, rgba(13, 17, 23, 0) 100%);
     animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
+    pointer-events: none;
+    /* Let clicks pass through the gradient background */
+}
+
+/* Allow clicks on actual interactive elements inside the panel */
+.explore-panel>* {
+    pointer-events: auto;
 }
 
 /* ===== Time Selector ===== */
@@ -101,11 +118,14 @@
 }
 
 .time-selector-label {
-    font-size: 0.65rem;
-    letter-spacing: 0.12em;
-    color: #888;
+    font-size: 0.75rem;
+    letter-spacing: 0.15em;
+    /* 広く */
+    color: #8B949E;
     text-transform: uppercase;
     margin-bottom: 0.6rem;
+    font-family: 'Inter', 'Roboto Mono', monospace;
+    font-weight: 300;
 }
 
 .time-display {
@@ -117,16 +137,18 @@
 
 .time-value {
     font-size: 3rem;
-    font-weight: 200;
-    color: #c8a050;
+    font-weight: 300;
+    color: #E6EDF3;
     line-height: 1;
     letter-spacing: -0.02em;
+    font-family: 'Roboto Mono', monospace;
 }
 
 .time-unit {
     font-size: 1rem;
     font-weight: 300;
-    color: #888;
+    color: #8B949E;
+    font-family: 'Inter', 'Roboto Mono', monospace;
 }
 
 /* Custom Range Slider */
@@ -134,9 +156,10 @@
     -webkit-appearance: none;
     appearance: none;
     width: 100%;
-    height: 3px;
-    background: linear-gradient(to right, #c8a050 0%, #c8a050 var(--slider-progress, 0%), #333 var(--slider-progress, 0%), #333 100%);
-    border-radius: 2px;
+    height: 2px;
+    /* 限界まで細く */
+    background: linear-gradient(to right, #D4AF37 0%, #D4AF37 var(--slider-progress, 0%), #161B22 var(--slider-progress, 0%), #161B22 100%);
+    border-radius: 0;
     outline: none;
     cursor: pointer;
 }
@@ -144,30 +167,29 @@
 .time-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: #c8a050;
+    width: 16px;
+    height: 16px;
+    border-radius: 0;
+    background: #D4AF37;
     cursor: pointer;
-    box-shadow: 0 0 12px rgba(200, 160, 80, 0.5),
-        0 2px 6px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 0 10px rgba(212, 175, 55, 0.3);
+    border: 2px solid #0D1117;
     transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .time-slider::-webkit-slider-thumb:hover {
-    transform: scale(1.15);
-    box-shadow: 0 0 18px rgba(200, 160, 80, 0.7),
-        0 2px 8px rgba(0, 0, 0, 0.4);
+    transform: scale(1.1);
+    box-shadow: 0 0 15px rgba(212, 175, 55, 0.5);
 }
 
 .time-slider::-moz-range-thumb {
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: #c8a050;
+    width: 16px;
+    height: 16px;
+    border-radius: 0;
+    background: #D4AF37;
     cursor: pointer;
-    border: none;
-    box-shadow: 0 0 12px rgba(200, 160, 80, 0.5);
+    border: 2px solid #0D1117;
+    box-shadow: 0 0 10px rgba(212, 175, 55, 0.3);
 }
 
 .time-presets {
@@ -177,47 +199,53 @@
 }
 
 .time-preset-label {
-    font-size: 0.7rem;
-    color: #666;
+    font-size: 0.75rem;
+    color: #8B949E;
+    font-family: 'Inter', 'Roboto Mono', monospace;
+    font-weight: 300;
     cursor: pointer;
     padding: 0.2rem 0.4rem;
     border-radius: 4px;
+    /* シャープに */
     transition: all 0.2s ease;
 }
 
 .time-preset-label.active {
-    color: #c8a050;
-    font-weight: 500;
+    color: #D4AF37;
+    font-weight: 300;
+    background-color: rgba(212, 175, 55, 0.1);
 }
 
 .time-preset-label:hover {
-    color: #aaa;
+    color: #E6EDF3;
 }
 
 /* ===== Search Route Button ===== */
 .search-route-btn {
     width: 100%;
-    padding: 0.9rem 1.5rem;
-    border-radius: 14px;
-    background: linear-gradient(135deg, #c8a050 0%, #a4803a 100%);
-    color: #0a0a0a;
-    font-size: 0.9rem;
-    font-weight: 600;
-    letter-spacing: 0.08em;
+    padding: 1rem 1.5rem;
+    border-radius: 4px;
+    /* シネマティック角丸 */
+    background: transparent;
+    background-color: #D4AF37;
+    border: 1px solid #D4AF37;
+    color: #0D1117;
+    font-size: 0.95rem;
+    font-weight: 300;
+    letter-spacing: 0.15em;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    border: none;
-    box-shadow: 0 4px 20px rgba(200, 160, 80, 0.25);
 }
 
 .search-route-btn:hover {
-    background: linear-gradient(135deg, #d4b060 0%, #b89045 100%);
+    background: #D4AF37;
+    color: #0D1117;
     transform: translateY(-1px);
-    box-shadow: 0 6px 24px rgba(200, 160, 80, 0.35);
+    box-shadow: 0 10px 30px rgba(212, 175, 55, 0.2);
 }
 
 .search-route-btn:active {
@@ -225,8 +253,9 @@
 }
 
 .search-route-btn:disabled {
-    background: #333;
-    color: #666;
+    background: transparent;
+    border-color: #161B22;
+    color: #8B949E;
     cursor: not-allowed;
     box-shadow: none;
     transform: none;
@@ -234,6 +263,8 @@
 
 .search-route-btn .btn-icon {
     font-size: 1.1rem;
+    display: none;
+    /* アイコン非表示 */
 }
 
 /* ===== Loading State ===== */
@@ -246,8 +277,8 @@
 .loading-spinner {
     width: 18px;
     height: 18px;
-    border: 2px solid rgba(10, 10, 10, 0.3);
-    border-top-color: #0a0a0a;
+    border: 2px solid transparent;
+    border-top-color: #D4AF37;
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
 }
@@ -258,12 +289,17 @@
     bottom: 0;
     left: 0;
     right: 0;
-    z-index: 1000;
-    max-height: 45vh;
+    z-index: 10;
+    /* Lower than BottomNav (100) */
+    max-height: 55vh;
+    /* slightly taller since we pushed it behind nav */
     overflow-y: auto;
-    background: linear-gradient(to top, rgba(10, 10, 10, 0.97) 0%, rgba(10, 10, 10, 0.85) 70%, rgba(10, 10, 10, 0) 100%);
-    padding: 1.5rem 1.2rem 2rem;
+    background: linear-gradient(to top, rgba(13, 17, 23, 1) 0%, rgba(13, 17, 23, 0.9) 70%, rgba(13, 17, 23, 0) 100%);
+    padding: 1.5rem 1.2rem calc(2rem + 70px);
+    /* Space for BottomNav */
     animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    pointer-events: auto;
+    /* Results panel needs to be scrollable */
 }
 
 .result-header {
@@ -275,17 +311,18 @@
 
 .result-title {
     font-size: 1.2rem;
-    font-weight: 400;
-    letter-spacing: 0.02em;
+    font-weight: 300;
+    letter-spacing: 0.1em;
+    color: #E6EDF3;
 }
 
 .result-close-btn {
     width: 32px;
     height: 32px;
-    border-radius: 50%;
-    background: rgba(255, 255, 255, 0.08);
-    color: #aaa;
-    font-size: 1rem;
+    border-radius: 4px;
+    background: transparent;
+    color: #8B949E;
+    font-size: 1.2rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -295,8 +332,7 @@
 }
 
 .result-close-btn:hover {
-    background: rgba(255, 255, 255, 0.15);
-    color: #fff;
+    color: #E6EDF3;
 }
 
 .result-stats {
@@ -311,18 +347,21 @@
 }
 
 .result-stat-value {
-    font-size: 1.4rem;
+    font-size: 1.6rem;
     font-weight: 300;
-    color: #c8a050;
+    color: #D4AF37;
     line-height: 1.1;
+    font-family: 'Roboto Mono', monospace;
 }
 
 .result-stat-label {
-    font-size: 0.6rem;
-    letter-spacing: 0.08em;
-    color: #666;
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    color: #8B949E;
     text-transform: uppercase;
     margin-top: 0.2rem;
+    font-family: 'Inter', 'Roboto Mono', monospace;
+    font-weight: 300;
 }
 
 /* ===== Cinematic Spot Cards ===== */
@@ -331,32 +370,38 @@
 }
 
 .spots-label {
-    font-size: 0.65rem;
-    letter-spacing: 0.12em;
-    color: #888;
+    font-size: 0.75rem;
+    letter-spacing: 0.15em;
+    color: #8B949E;
     text-transform: uppercase;
     margin-bottom: 0.8rem;
+    font-family: 'Inter', 'Roboto Mono', monospace;
+    font-weight: 300;
 }
 
 .spot-card {
-    background: rgba(25, 25, 30, 0.8);
-    backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 12px;
-    padding: 0.9rem 1rem;
-    margin-bottom: 0.6rem;
-    transition: all 0.2s ease;
+    background: #161B22;
+    /* Card Background */
+    border: none;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    /* シネマティックシャドウ */
+    border-radius: 4px;
+    padding: 1.2rem;
+    margin-bottom: 1rem;
+    transition: all 0.3s ease;
 }
 
 .spot-card:hover {
-    border-color: rgba(200, 160, 80, 0.2);
-    background: rgba(30, 30, 35, 0.9);
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.6);
+    transform: translateY(-2px);
 }
 
 .spot-name {
-    font-size: 0.95rem;
-    font-weight: 400;
-    margin-bottom: 0.3rem;
+    font-size: 1rem;
+    font-weight: 300;
+    letter-spacing: 0.05em;
+    color: #E6EDF3;
+    margin-bottom: 0.5rem;
     display: flex;
     align-items: center;
     gap: 0.4rem;
@@ -367,37 +412,43 @@
 }
 
 .spot-guide {
-    font-size: 0.75rem;
-    color: #aaa;
-    line-height: 1.4;
+    font-size: 0.85rem;
+    color: #8B949E;
+    line-height: 1.6;
+    font-weight: 300;
 }
 
 .spot-sun-info {
     display: flex;
     align-items: center;
     gap: 0.3rem;
-    margin-top: 0.4rem;
-    font-size: 0.65rem;
-    color: #c8a050;
+    margin-top: 0.6rem;
+    font-size: 0.75rem;
+    color: #D4AF37;
+    font-family: 'Inter', 'Roboto Mono', monospace;
+    font-weight: 300;
 }
 
 /* ===== New Search Button ===== */
 .new-search-btn {
     width: 100%;
-    padding: 0.8rem;
+    padding: 1rem;
     margin-top: 0.8rem;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    color: #aaa;
-    font-size: 0.8rem;
+    border-radius: 4px;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid #161B22;
+    color: #8B949E;
+    font-size: 0.9rem;
+    font-weight: 300;
+    letter-spacing: 0.1em;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.3s ease;
 }
 
 .new-search-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #fff;
+    color: #E6EDF3;
+    border-color: #E6EDF3;
 }
 
 /* ===== Location Error ===== */
@@ -417,26 +468,32 @@
 }
 
 .location-error-text {
-    font-size: 0.9rem;
-    color: #aaa;
-    line-height: 1.5;
+    font-size: 0.95rem;
+    color: #8B949E;
+    line-height: 1.6;
+    font-weight: 300;
+    letter-spacing: 0.05em;
     max-width: 280px;
 }
 
 .location-retry-btn {
-    margin-top: 1rem;
-    padding: 0.7rem 1.5rem;
-    border-radius: 10px;
-    background: rgba(200, 160, 80, 0.15);
-    border: 1px solid rgba(200, 160, 80, 0.3);
-    color: #c8a050;
-    font-size: 0.8rem;
+    margin-top: 1.5rem;
+    padding: 0.8rem 2rem;
+    border-radius: 4px;
+    background: transparent;
+    border: 1px solid #D4AF37;
+    color: #D4AF37;
+    font-size: 0.9rem;
+    font-weight: 300;
+    letter-spacing: 0.15em;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.3s ease;
 }
 
 .location-retry-btn:hover {
-    background: rgba(200, 160, 80, 0.25);
+    background: #D4AF37;
+    color: #0D1117;
+    box-shadow: 0 10px 30px rgba(212, 175, 55, 0.2);
 }
 
 /* ===== Animations ===== */
@@ -486,4 +543,102 @@
 .explore-panel,
 .result-panel {
     padding-bottom: calc(2rem + 70px);
+}
+
+/* ===== 0 Routes Panel ===== */
+.zero-routes-panel {
+    text-align: center;
+    padding-top: 2rem;
+}
+
+.zero-routes-text {
+    font-size: 0.95rem;
+    color: #E6EDF3;
+    line-height: 1.8;
+    margin-bottom: 2rem;
+    font-weight: 300;
+    letter-spacing: 0.05em;
+}
+
+/* ===== Route Carousel ===== */
+.route-carousel {
+    display: flex;
+    gap: 1rem;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    padding-bottom: 1rem;
+    margin-bottom: 1rem;
+    -webkit-overflow-scrolling: touch;
+}
+
+.route-carousel::-webkit-scrollbar {
+    height: 4px;
+}
+
+.route-carousel::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+}
+
+.route-carousel::-webkit-scrollbar-thumb {
+    background: rgba(200, 160, 80, 0.4);
+    border-radius: 4px;
+}
+
+.carousel-card {
+    flex: 0 0 85%;
+    scroll-snap-align: start;
+    background: #161B22;
+    /* Card Background */
+    border: none;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    /* シネマティックシャドウ */
+    border-radius: 4px;
+    padding: 1.2rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.carousel-card:hover {
+    background: #21262D;
+}
+
+.carousel-card.active {
+    background: #21262D;
+    border: 1px solid #D4AF37;
+    box-shadow: 0 15px 40px rgba(0, 0, 0, 0.6), 0 0 15px rgba(212, 175, 55, 0.1);
+}
+
+.carousel-card-title {
+    font-size: 1.1rem;
+    font-weight: 300;
+    letter-spacing: 0.05em;
+    color: #E6EDF3;
+    margin-bottom: 0.6rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.carousel-card-stats {
+    font-size: 0.85rem;
+    color: #D4AF37;
+    letter-spacing: 0.1em;
+    font-family: 'Inter', 'Roboto Mono', monospace;
+    font-weight: 300;
+}
+
+.active-route-title-section {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #161B22;
+    /* より暗いボーダー */
+}
+
+.active-route-title {
+    font-size: 1.3rem;
+    font-weight: 300;
+    color: #E6EDF3;
+    line-height: 1.5;
+    letter-spacing: 0.05em;
 }

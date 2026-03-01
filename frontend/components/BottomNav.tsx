@@ -1,4 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom';
+import { Home, Activity, Map, PlusSquare, Settings } from 'lucide-react';
 import './BottomNav.css';
 
 function BottomNav() {
@@ -11,26 +12,36 @@ function BottomNav() {
                 className={`bottom-nav-item ${location.pathname === '/home' ? 'active' : ''}`}
                 onClick={() => navigate('/home')}
             >
+                <Home strokeWidth={1.5} className="bottom-nav-icon" />
                 <span className="bottom-nav-label">Home</span>
             </button>
-
-            {/* 中央の丸型ヘルスメータ (FAB風) */}
-            <div className="bottom-nav-fab-container">
-                <button
-                    className="bottom-nav-fab"
-                    onClick={() => navigate('/health')}
-                >
-                    <div className="fab-inner">
-                        <span className="fab-icon">🩺</span>
-                    </div>
-                </button>
-            </div>
-
+            <button
+                className={`bottom-nav-item ${location.pathname === '/health' ? 'active' : ''}`}
+                onClick={() => navigate('/health')}
+            >
+                <Activity strokeWidth={1.5} className="bottom-nav-icon" />
+                <span className="bottom-nav-label">Health</span>
+            </button>
+            <button
+                className={`bottom-nav-item ${location.pathname === '/explore' ? 'active' : ''}`}
+                onClick={() => navigate('/explore')}
+            >
+                <Map strokeWidth={1.5} className="bottom-nav-icon" />
+                <span className="bottom-nav-label">Explore</span>
+            </button>
+            <button
+                className={`bottom-nav-item ${location.pathname === '/create' ? 'active' : ''}`}
+                onClick={() => navigate('/create')}
+            >
+                <PlusSquare strokeWidth={1.5} className="bottom-nav-icon" />
+                <span className="bottom-nav-label">Create</span>
+            </button>
             <button
                 className={`bottom-nav-item ${location.pathname === '/settings' ? 'active' : ''}`}
                 onClick={() => navigate('/settings')}
             >
-                <span className="bottom-nav-label">Setting</span>
+                <Settings strokeWidth={1.5} className="bottom-nav-icon" />
+                <span className="bottom-nav-label">Settings</span>
             </button>
         </nav>
     );

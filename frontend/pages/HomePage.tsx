@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../src/contexts/AuthContext';
 import BottomNav from '../components/BottomNav';
@@ -6,6 +7,9 @@ import './HomePage.css';
 function HomePage() {
     const navigate = useNavigate();
     const { profileData } = useAuth();
+
+    // Background Image State
+    const [bgImage] = useState<string | null>(() => localStorage.getItem('home_bg_image'));
 
     // 最初の車両データを取得（複数車両対応は将来の拡張）
     const vehicle = profileData?.vehicles?.[0] ?? null;
@@ -24,76 +28,43 @@ function HomePage() {
     // ルート推薦（Explore機能実装時にリアルデータ化予定）
     const recommendedRoute = {
         title: "阿蘇パノラマライン",
-        duration: "1h",
+        duration: "1h 30m",
         description: "夕陽が当たる最高のワインディングロード"
     };
 
     return (
         <div className="home-page">
             {/* Background */}
-            <div className="home-bg" />
+            <div
+                className="home-bg"
+                style={bgImage ? {
+                    backgroundImage: `linear-gradient(to bottom, rgba(13, 17, 23, 0.1) 0%, rgba(13, 17, 23, 0.9) 60%, rgba(13, 17, 23, 1) 100%), url(${bgImage})`
+                } : undefined}
+            />
 
             <div className="home-content">
+                {/* Logo Area */}
+                <div className="home-top-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', marginTop: '-1rem' }}>
+                    <h1 className="home-text-logo">
+                        <span className="home-text-logo-accent">r</span>ide
+                    </h1>
+                </div>
+
                 {/* 1. Header (Status) */}
-                <header className="home-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                        <div className="status-block">
-                            <h2 className="vehicle-name">{vehicleName}</h2>
-                            <span className="vehicle-odo">ODO: {currentOdo}</span>
-                        </div>
-                        <div className="health-block">
-                            <span className="health-label">HEALTH</span>
-                            <span className="health-score">--</span>
-                        </div>
+                <header className="home-header">
+                    <div className="status-block">
+                        <h2 className="vehicle-name">{vehicleName}</h2>
+                        <span className="vehicle-odo">ODO: {currentOdo}</span>
                     </div>
-                    <button
-                        onClick={async () => {
-                            const { supabase } = await import('../src/lib/supabase');
-                            await supabase.auth.signOut();
-                        }}
-                        style={{
-                            background: 'transparent',
-                            border: '1px solid rgba(255, 255, 255, 0.2)',
-                            color: 'rgba(255, 255, 255, 0.7)',
-                            padding: '6px 12px',
-                            borderRadius: '20px',
-                            fontSize: '0.8rem',
-                            cursor: 'pointer'
-                        }}
-                    >
-                        サインアウト
-                    </button>
                 </header>
 
-                {/* 2. Main Features (3 Cards) */}
-                <main className="home-features">
-                    <button className="feature-card health" onClick={() => navigate('/health')}>
-                        <div className="feature-text">
-                            <h3>Health</h3>
-                            <p>コンディション診断</p>
-                        </div>
-                    </button>
-                    <button className="feature-card explore" onClick={() => navigate('/explore')}>
-                        <div className="feature-text">
-                            <h3>Explore</h3>
-                            <p>ルートレコメンド</p>
-                        </div>
-                    </button>
-                    <button className="feature-card create" onClick={() => navigate('/create')}>
-                        <div className="feature-text">
-                            <h3>Create</h3>
-                            <p>シネマエディター</p>
-                        </div>
-                    </button>
-                </main>
-
-                {/* 3. Recommend Route Card */}
+                {/* 2. Recommend Route Card */}
                 <section className="home-recommend">
-                    <h3 className="section-title">SUGGESTED ROUTE</h3>
-                    <div className="route-card">
+                    <h3 className="section-title">おすすめルート</h3>
+                    <div className="route-card" onClick={() => navigate('/explore')}>
                         <div className="route-card-bg"></div>
                         <div className="route-card-content">
-                            <span className="route-duration">{recommendedRoute.duration}</span>
+                            <span className="route-duration">⏱ {recommendedRoute.duration}</span>
                             <h4 className="route-title">{recommendedRoute.title}</h4>
                             <p className="route-desc">{recommendedRoute.description}</p>
                         </div>
@@ -108,4 +79,3 @@ function HomePage() {
 }
 
 export default HomePage;
-
