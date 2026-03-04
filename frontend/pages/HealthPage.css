@@ -28,12 +28,29 @@
 }
 
 .back-btn {
-    background: none;
-    border: none;
-    color: #888;
-    font-size: 1rem;
+    width: 40px;
+    height: 40px;
+    border-radius: 4px;
+    /* 最小限の角丸 */
+    background: rgba(22, 27, 34, 0.7);
+    /* Card background */
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #E6EDF3;
+    font-size: 1.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
+    transition: all 0.2s ease;
     padding: 0;
+}
+
+.back-btn:hover {
+    background: rgba(22, 27, 34, 0.9);
+    border-color: #D4AF37;
+    /* Antique Gold */
 }
 
 .health-title {
@@ -45,7 +62,7 @@
 }
 
 .spacer {
-    width: 50px;
+    width: 40px;
     /* back-btnと同じ幅にして中央揃えを維持 */
 }
 
@@ -504,5 +521,36 @@
 
     to {
         opacity: 0.3;
+    }
+}
+
+/* --- Mobile / Responsive --- */
+@media (max-width: 768px) {
+    .health-header {
+        padding: 1.5rem 1rem 0.5rem;
+    }
+
+    .health-content {
+        padding: 0 1rem 5rem;
+    }
+
+    .mode-selector {
+        gap: 1rem;
+    }
+
+    .analysis-result-card {
+        padding: 1.5rem 1rem;
+        margin-top: 2rem;
+    }
+
+    .record-btn {
+        width: 72px;
+        /* Slightly larger for easier tapping on mobile */
+        height: 72px;
+    }
+
+    .shutter-btn {
+        width: 76px;
+        height: 76px;
     }
 }

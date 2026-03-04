@@ -274,19 +274,25 @@
 
 .btn-primary,
 .btn-secondary {
-    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    min-height: 48px;
+    padding: 10px 24px;
     border-radius: var(--radius-full);
     font-weight: var(--font-weight-semibold);
     font-size: 0.95rem;
     letter-spacing: 0.03em;
     cursor: pointer;
     transition: all var(--transition-normal);
+    margin-top: 0.5rem;
 }
 
 .btn-primary {
     background: linear-gradient(135deg, var(--color-gold) 0%, var(--color-gold-dark) 100%);
     color: #0a0a0a;
-    border: none;
+    border: 1px solid transparent;
     box-shadow: 0 4px 15px rgba(200, 165, 78, 0.2);
 }
 
@@ -319,8 +325,49 @@
     background: rgba(255, 255, 255, 0.05);
 }
 
-@media (max-width: 480px) {
+.form-row {
+    display: flex;
+    gap: 1rem;
+    width: 100%;
+}
+
+.form-row .form-group {
+    flex: 1;
+}
+
+/* --- Mobile / Responsive --- */
+@media (max-width: 768px) {
     .onboarding-form-container {
         padding: var(--space-xl);
+    }
+
+    .onboarding-title {
+        font-size: 1.5rem;
+    }
+
+    .onboarding-subtitle {
+        font-size: 0.85rem;
+    }
+
+    /* Stack form inputs vertically on mobile */
+    .form-row {
+        flex-direction: column;
+        gap: 0;
+        /* Let .form-group margin-bottom handle spacing */
+    }
+
+    .btn-primary,
+    .btn-secondary {
+        /* Larger tap target and full width for mobile ease of use */
+        padding: 10px 16px;
+        min-height: 56px;
+        flex: 1;
+        white-space: nowrap;
+        /* Prevent text wrapping from breaking layout */
+    }
+
+    .form-actions {
+        /* Maintain split button layout but adjust spacing */
+        gap: 1rem;
     }
 }

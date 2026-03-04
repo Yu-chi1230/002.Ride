@@ -1,6 +1,12 @@
 import { supabase } from './supabase';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8001';
+const envApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8001';
+const isLocalhostUrl = envApiUrl.includes('localhost') || envApiUrl.includes('127.0.0.1');
+
+// Convert localhost in VITE_API_URL to the current hostname for local network access
+export const API_BASE_URL = isLocalhostUrl
+    ? envApiUrl.replace(/localhost|127\.0\.0\.1/, window.location.hostname)
+    : envApiUrl;
 
 /**
  * 認証トークン（Access Token）を付与して fetch を実行するラッパー関数

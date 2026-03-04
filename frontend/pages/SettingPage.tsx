@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../src/contexts/AuthContext';
 import { apiFetch } from '../src/lib/api';
 import BottomNav from '../components/BottomNav';
+import { VEHICLE_MAKERS } from '../src/constants/vehicleMakers';
 import './SettingPage.css';
 
 function SettingPage() {
@@ -40,7 +41,7 @@ function SettingPage() {
     // Background Image
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
     };
@@ -160,8 +161,13 @@ function SettingPage() {
     return (
         <div className="setting-page">
             <div className="setting-content">
-                <header className="setting-header">
+                <header className="setting-header" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                     <h1>Settings</h1>
+                    {!isEditing && (
+                        <button className="btn-secondary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.9rem', marginTop: '0.2rem' }} onClick={() => setIsEditing(true)}>
+                            編集
+                        </button>
+                    )}
                 </header>
 
                 {message && (
@@ -181,18 +187,13 @@ function SettingPage() {
                 <section className="setting-section">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <h2 className="setting-section-title" style={{ borderBottom: 'none', marginBottom: 0 }}>プロフィール設定</h2>
-                        {!isEditing && (
-                            <button className="btn-secondary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.9rem' }} onClick={() => setIsEditing(true)}>
-                                編集
-                            </button>
-                        )}
                     </div>
 
                     <p className="setting-help-text" style={{ marginTop: '0.5rem' }}>名前や車両情報の確認・変更ができます。</p>
 
                     <form className="setting-form" onSubmit={handleSaveProfile}>
                         <div className="form-group">
-                            <label>表示名 (Display Name)</label>
+                            <label>　表示名</label>
                             <input
                                 type="text"
                                 name="display_name"
@@ -205,7 +206,7 @@ function SettingPage() {
 
                         <div style={{ display: 'flex', gap: '1rem' }}>
                             <div className="form-group" style={{ flex: 1 }}>
-                                <label>姓 (Last Name)</label>
+                                <label>　姓</label>
                                 <input
                                     type="text"
                                     name="last_name"
@@ -216,7 +217,7 @@ function SettingPage() {
                                 />
                             </div>
                             <div className="form-group" style={{ flex: 1 }}>
-                                <label>名 (First Name)</label>
+                                <label>　名</label>
                                 <input
                                     type="text"
                                     name="first_name"
@@ -229,19 +230,23 @@ function SettingPage() {
                         </div>
 
                         <div className="form-group" style={{ marginTop: '0.5rem' }}>
-                            <label>メーカー (Vehicle Maker)</label>
-                            <input
-                                type="text"
+                            <label>　メーカー</label>
+                            <select
                                 name="vehicle_maker"
                                 value={formData.vehicle_maker}
                                 onChange={handleInputChange}
                                 disabled={!isEditing}
                                 required
-                            />
+                            >
+                                <option value="" disabled>メーカーを選択してください</option>
+                                {VEHICLE_MAKERS.map(maker => (
+                                    <option key={maker.value} value={maker.value}>{maker.label}</option>
+                                ))}
+                            </select>
                         </div>
 
                         <div className="form-group">
-                            <label>車種名 (Vehicle Model)</label>
+                            <label>　車種名</label>
                             <input
                                 type="text"
                                 name="vehicle_model_name"
@@ -263,7 +268,7 @@ function SettingPage() {
                                 >
                                     キャンセル
                                 </button>
-                                <button type="submit" className="btn-primary" style={{ flex: 1, margin: 0 }} disabled={isLoading}>
+                                <button type="submit" className="btn-primary" style={{ flex: 1 }} disabled={isLoading}>
                                     {isLoading ? '保存中...' : '保存する'}
                                 </button>
                             </div>
@@ -274,6 +279,39 @@ function SettingPage() {
                 {/* Preferences Section */}
                 <section className="setting-section">
                     <h2 className="setting-section-title">アプリ設定</h2>
+
+                    <div style={{ marginBottom: '1.5rem' }}>
+                        <p className="setting-help-text" style={{ marginBottom: '0.5rem' }}>Explore画面でのデフォルトの走行時間</p>
+                        <select
+                            defaultValue={localStorage.getItem('default_riding_time') || '60'}
+                            onChange={(e) => {
+                                localStorage.setItem('default_riding_time', e.target.value);
+                                setMessage({ text: 'デフォルトの走行時間を更新しました。', type: 'success' });
+                            }}
+                            style={{
+                                width: '100%',
+                                background: '#0d1117',
+                                color: '#c9d1d9',
+                                border: '1px solid #30363d',
+                                padding: '0.8rem 1rem',
+                                borderRadius: '8px',
+                                appearance: 'none',
+                                backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b949e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+                                backgroundRepeat: 'no-repeat',
+                                backgroundPosition: 'right 1rem center',
+                                backgroundSize: '1em'
+                            }}
+                        >
+                            <option value="30">30分</option>
+                            <option value="60">1時間 (60分)</option>
+                            <option value="90">1時間30分 (90分)</option>
+                            <option value="120">2時間 (120分)</option>
+                            <option value="180">3時間 (180分)</option>
+                            <option value="240">4時間 (240分)</option>
+                            <option value="300">5時間 (300分)</option>
+                        </select>
+                    </div>
+
                     <p className="setting-help-text">ホーム画面の背景画像を変更できます。</p>
                     <button
                         className="btn-secondary"

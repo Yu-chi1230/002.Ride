@@ -23,7 +23,11 @@ app.use(cors({
     origin: function (origin, callback) {
         // allow requests with no origin (like mobile apps or curl requests)
         if (!origin) return callback(null, true);
-        if (allowedOrigins.indexOf(origin) === -1) {
+
+        // Allow localhost, 127.0.0.1, and local network IPs (10.x.x.x, 192.168.x.x, 172.16-31.x.x)
+        const isAllowed = /^http:\/\/(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$/.test(origin);
+
+        if (!isAllowed && allowedOrigins.indexOf(origin) === -1) {
             var msg = 'The CORS policy for this site does not allow access from the specified Origin.';
             return callback(new Error(msg), false);
         }
@@ -498,6 +502,34 @@ app.post('/api/explore/routes', requireAuth, async (req: AuthRequest, res: Respo
     } catch (error: any) {
         console.error('Explore Route Generation Error:', error);
         res.status(500).json({ error: 'Internal Server Error during route generation' });
+    }
+});
+
+// ===== Explore: 最新ルート取得API =====
+app.get('/api/explore/routes/latest', requireAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const userId = req.user.id;
+
+        const route = await prisma.routes.findFirst({
+            where: { user_id: userId },
+            orderBy: { created_at: 'desc' },
+        });
+
+        if (!route) {
+            return res.status(404).json({ error: 'No routes found' });
+        }
+
+        res.status(200).json({
+            message: 'Latest route fetched successfully',
+            data: { route }
+        });
+    } catch (error: any) {
+        console.error('Explore Latest Route Fetch Error:', error);
+        res.status(500).json({ error: 'Internal Server Error fetching latest route' });
     }
 });
 

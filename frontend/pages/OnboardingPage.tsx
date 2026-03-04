@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '../src/lib/supabase';
 import { apiFetch } from '../src/lib/api';
+import { VEHICLE_MAKERS } from '../src/constants/vehicleMakers';
 import './OnboardingPage.css';
 
 function OnboardingPage() {
@@ -120,9 +121,9 @@ function OnboardingPage() {
                         {/* STEP 1: User Profile */}
                         {step === 1 && (
                             <div className="onboarding-step-wrapper fade-in">
-                                <div style={{ display: 'flex', gap: '1rem', width: '100%' }}>
-                                    <div className="form-group" style={{ flex: 1 }}>
-                                        <label htmlFor="lastName">姓 (Last Name)</label>
+                                <div className="form-row">
+                                    <div className="form-group">
+                                        <label htmlFor="lastName">　姓</label>
                                         <input
                                             type="text"
                                             id="lastName"
@@ -132,8 +133,8 @@ function OnboardingPage() {
                                             placeholder="山田"
                                         />
                                     </div>
-                                    <div className="form-group" style={{ flex: 1 }}>
-                                        <label htmlFor="firstName">名 (First Name)</label>
+                                    <div className="form-group">
+                                        <label htmlFor="firstName">　名</label>
                                         <input
                                             type="text"
                                             id="firstName"
@@ -145,7 +146,7 @@ function OnboardingPage() {
                                     </div>
                                 </div>
                                 <div className="form-group">
-                                    <label htmlFor="displayName">表示名 (Display Name)</label>
+                                    <label htmlFor="displayName">　表示名</label>
                                     <input
                                         type="text"
                                         id="displayName"
@@ -156,7 +157,7 @@ function OnboardingPage() {
                                     />
                                 </div>
                                 <div className="form-group">
-                                    <label htmlFor="email">メールアドレス (Email)</label>
+                                    <label htmlFor="email">　メールアドレス</label>
                                     <input
                                         type="email"
                                         id="email"
@@ -167,7 +168,7 @@ function OnboardingPage() {
                                     />
                                 </div>
                                 <div className="form-group">
-                                    <label htmlFor="password">パスワード (Password)</label>
+                                    <label htmlFor="password">　パスワード</label>
                                     <div className="onboarding-password-wrapper">
                                         <input
                                             type={showPassword ? "text" : "password"}
@@ -192,7 +193,7 @@ function OnboardingPage() {
                                     </div>
                                 </div>
                                 <div className="form-group">
-                                    <label htmlFor="confirmPassword">パスワード（確認用）</label>
+                                    <label htmlFor="confirmPassword">　パスワード（確認用）</label>
                                     <div className="onboarding-password-wrapper">
                                         <input
                                             type={showConfirmPassword ? "text" : "password"}
@@ -216,7 +217,14 @@ function OnboardingPage() {
                                         </button>
                                     </div>
                                 </div>
-                                <div className="form-actions right">
+                                <div className="form-actions split">
+                                    <button
+                                        type="button"
+                                        className="btn-secondary"
+                                        onClick={() => window.location.href = '/'}
+                                    >
+                                        戻る
+                                    </button>
                                     <button
                                         type="button"
                                         className="btn-primary"
@@ -232,7 +240,7 @@ function OnboardingPage() {
                         {step === 2 && (
                             <div className="onboarding-step-wrapper fade-in">
                                 <div className="form-group">
-                                    <label htmlFor="vehicleMaker">車両メーカー (Vehicle Maker)</label>
+                                    <label htmlFor="vehicleMaker">　車両メーカー</label>
                                     <div className="custom-select-wrapper">
                                         <select
                                             id="vehicleMaker"
@@ -242,26 +250,21 @@ function OnboardingPage() {
                                             className="custom-select"
                                         >
                                             <option value="" disabled>メーカーを選択してください</option>
-                                            <option value="Honda">ホンダ</option>
-                                            <option value="Yamaha">ヤマハ</option>
-                                            <option value="Suzuki">スズキ</option>
-                                            <option value="Kawasaki">カワサキ</option>
-                                            <option value="HarleyDavidson">ハーレーダビッドソン</option>
-                                            <option value="Triumph">トライアンフ</option>
-                                            <option value="Ducati">ドゥカティ</option>
-                                            <option value="Other">その他 (Other)</option>
+                                            {VEHICLE_MAKERS.map(maker => (
+                                                <option key={maker.value} value={maker.value}>{maker.label}</option>
+                                            ))}
                                         </select>
                                     </div>
                                 </div>
                                 <div className="form-group">
-                                    <label htmlFor="vehicleName">Vehicle Name / Model</label>
+                                    <label htmlFor="vehicleName">　愛車名</label>
                                     <input
                                         type="text"
                                         id="vehicleName"
                                         name="vehicleName"
                                         value={formData.vehicleName}
                                         onChange={handleChange}
-                                        placeholder="e.g. CB400SF, Civic Type R"
+                                        placeholder="e.g. CB400SF"
                                     />
                                 </div>
                                 <div className="form-actions split">

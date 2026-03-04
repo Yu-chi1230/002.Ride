@@ -65,6 +65,12 @@ html {
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior: none;
+  touch-action: pan-y;
+  /* Disable pull-to-refresh and swipe navigation */
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
 }
 
 body {
@@ -73,8 +79,24 @@ body {
   background-color: var(--color-bg-primary);
   color: var(--color-text-primary);
   line-height: 1.6;
-  min-height: 100vh;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: fixed;
+  /* Completely stops body from scrolling on iOS */
+  top: 0;
+  left: 0;
+}
+
+/* Make React root the scrollable container instead of the body */
+#root {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
   overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: none;
+  /* Stops bounce effect in the container */
 }
 
 a {
@@ -90,7 +112,8 @@ button {
   background: none;
 }
 
-img, video {
+img,
+video {
   max-width: 100%;
   display: block;
 }
@@ -106,4 +129,21 @@ img, video {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* --- Responsive (Mobile) Base Adjustments --- */
+@media (max-width: 768px) {
+  html {
+    /* Slightly smaller base font size for mobile to fit more content gracefully */
+    font-size: 15px;
+  }
+
+  :root {
+    /* Compact the spacing slightly for smaller screens */
+    --space-md: 12px;
+    --space-lg: 20px;
+    --space-xl: 28px;
+    --space-2xl: 40px;
+    --space-3xl: 56px;
+  }
 }

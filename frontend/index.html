@@ -3,7 +3,7 @@
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>ride — あなたの愛車を、映画にする。</title>
   <meta name="description" content="バイク・車オーナーのためのAIライフログ・プラットフォーム" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -14,6 +14,25 @@
 <body>
   <div id="root"></div>
   <script type="module" src="/src/main.tsx"></script>
+  <!-- iOS Safariなどでメタタグのuser-scalable=noが無視されることへの対策 -->
+  <script>
+    // ピンチイン・ピンチアウト（ズーム）の無効化
+    document.addEventListener('touchmove', function (event) {
+      if (event.touches.length > 1) {
+        event.preventDefault();
+      }
+    }, { passive: false });
+
+    // ダブルタップによるズームの無効化
+    let lastTouchEnd = 0;
+    document.addEventListener('touchend', function (event) {
+      const now = (new Date()).getTime();
+      if (now - lastTouchEnd <= 300) {
+        event.preventDefault();
+      }
+      lastTouchEnd = now;
+    }, { passive: false });
+  </script>
 </body>
 
 </html>

@@ -62,7 +62,8 @@
     font-weight: 500;
 }
 
-.form-group input {
+.form-group input,
+.form-group select {
     background: #0d1117;
     border: 1px solid #30363d;
     border-radius: 8px;
@@ -72,14 +73,25 @@
     transition: border-color 0.2s;
 }
 
-.form-group input:focus {
+.form-group select {
+    appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b949e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 1rem center;
+    background-size: 1em;
+}
+
+.form-group input:focus,
+.form-group select:focus {
     outline: none;
     border-color: #58a6ff;
 }
 
-.form-group input:disabled {
+.form-group input:disabled,
+.form-group select:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+    background-image: none;
 }
 
 /* Button Styles */
@@ -94,7 +106,6 @@
     cursor: pointer;
     transition: background-color 0.2s;
     text-align: center;
-    margin-top: 0.5rem;
 }
 
 .btn-primary:hover {

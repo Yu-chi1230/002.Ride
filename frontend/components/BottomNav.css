@@ -67,3 +67,18 @@
     text-transform: uppercase;
     /* よりメーターのような精密感を出すため大文字に */
 }
+
+/* --- Mobile / Responsive --- */
+@media (max-width: 768px) {
+    .bottom-nav {
+        /* Add padding for iOS home indicator */
+        padding-bottom: env(safe-area-inset-bottom, 20px);
+        height: calc(70px + env(safe-area-inset-bottom, 20px));
+    }
+
+    .bottom-nav-item {
+        /* Ensure minimum 44px tap target area */
+        width: 100%;
+        min-height: 44px;
+    }
+}

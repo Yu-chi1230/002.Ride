@@ -234,7 +234,7 @@ function HealthPage() {
         <div className="health-page">
             {/* Header */}
             <header className="health-header">
-                <button className="back-btn" onClick={() => navigate('/home')}>← Back</button>
+                <button className="back-btn" onClick={() => navigate('/home')}>←</button>
                 <h2 className="health-title">Health Check</h2>
                 <div className="spacer"></div>
             </header>
@@ -358,11 +358,11 @@ function HealthPage() {
                                 onChange={(e) => setLogType(e.target.value as any)}
                                 className="minimal-select"
                             >
-                                <option value="meter">メーター (ODO / Mileage)</option>
-                                <option value="tire">タイヤ (Tire)</option>
-                                <option value="chain">ドライブチェーン (Chain)</option>
-                                <option value="plug">スパークプラグ (Spark Plug)</option>
-                                <option value="engine">エンジンブロック (Engine Block)</option>
+                                <option value="meter">メーター</option>
+                                <option value="tire">タイヤ</option>
+                                <option value="chain">ドライブチェーン</option>
+                                <option value="plug">スパークプラグ</option>
+                                <option value="engine">エンジンブロック</option>
                             </select>
                         </div>
 

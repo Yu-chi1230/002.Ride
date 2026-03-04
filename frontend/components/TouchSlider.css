@@ -1,0 +1,54 @@
+.touch-slider-container {
+    position: relative;
+    width: 100%;
+    /* 大きめのパディングでタップ・ドラッグ領域を確保 */
+    padding: 24px 0;
+    cursor: pointer;
+    /* スワイプ等を無効化してドラッグを安定させる */
+    touch-action: none;
+    pointer-events: auto;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.touch-slider-track {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    transform: translateY(-50%);
+    height: 4px;
+    /* トラックの太さ */
+    background: #161B22;
+    /* 未選択部分 */
+    border-radius: 2px;
+}
+
+.touch-slider-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: #D4AF37;
+    /* 選択部分 (ゴールド) */
+    border-radius: 2px;
+}
+
+.touch-slider-thumb {
+    position: absolute;
+    top: 50%;
+    /* margin-top: -16px; (24px / 2 = 12px) + top50%で中央寄せ */
+    transform: translate(-50%, -50%);
+    width: 28px;
+    height: 28px;
+    background: #D4AF37;
+    border: 3px solid #0D1117;
+    border-radius: 50%;
+    box-shadow: 0 0 10px rgba(212, 175, 55, 0.4);
+    transition: box-shadow 0.15s ease;
+}
+
+.touch-slider-container:hover .touch-slider-thumb,
+.touch-slider-container:active .touch-slider-thumb {
+    box-shadow: 0 0 15px rgba(212, 175, 55, 0.6);
+}

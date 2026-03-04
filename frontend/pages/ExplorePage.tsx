@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MapContainer, TileLayer, Circle, Polyline, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import BottomNav from '../components/BottomNav';
+import TouchSlider from '../components/TouchSlider';
 import { apiFetch } from '../src/lib/api';
 import 'leaflet/dist/leaflet.css';
 import './ExplorePage.css';
@@ -73,11 +74,8 @@ function RecenterMap({ lat, lng }: { lat: number; lng: number }) {
 
 // ===== タイムプリセット =====
 const TIME_PRESETS = [
-    { label: '30min', value: 30 },
-    { label: '1h', value: 60 },
-    { label: '1.5h', value: 90 },
-    { label: '2h', value: 120 },
-    { label: '3h', value: 180 },
+    { label: '00:30', value: 30 },
+    { label: '05:00', value: 300 },
 ];
 
 // ===== メインコンポーネント =====
@@ -85,13 +83,12 @@ function ExplorePage() {
     const navigate = useNavigate();
 
     // 状態管理
-    const [timeLimit, setTimeLimit] = useState(60);
+    const [timeLimit, setTimeLimit] = useState(() => parseInt(localStorage.getItem('default_riding_time') || '60', 10));
     const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
     const [locationError, setLocationError] = useState(false);
     const [isSearching, setIsSearching] = useState(false);
     const [routeResults, setRouteResults] = useState<RouteResult[] | null>(null);
     const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
-    const sliderRef = useRef<HTMLInputElement>(null);
 
     const activeRouteResult = routeResults?.[selectedRouteIndex] ?? null;
 
@@ -119,12 +116,12 @@ function ExplorePage() {
     }, [fetchLocation]);
 
     // ===== スライダーの進捗を CSS 変数で反映 =====
-    useEffect(() => {
-        if (sliderRef.current) {
-            const progress = ((timeLimit - 30) / (180 - 30)) * 100;
-            sliderRef.current.style.setProperty('--slider-progress', `${progress}%`);
-        }
-    }, [timeLimit, userLocation, routeResults]);
+    // useEffect(() => {
+    //     if (sliderRef.current) {
+    //         const progress = ((timeLimit - 30) / (300 - 30)) * 100;
+    //         sliderRef.current.style.setProperty('--slider-progress', `${progress}%`);
+    //     }
+    // }, [timeLimit, userLocation, routeResults]);
 
     // ===== ルート検索 =====
     const handleSearch = async () => {
@@ -159,15 +156,13 @@ function ExplorePage() {
             ?.sort((a, b) => a.order_index - b.order_index)
             .map((wp) => [wp.latitude, wp.longitude]) ?? [];
 
-    // ===== 到達可能範囲の半径（概算: 時間 × 平均速度40km/h → メートル） =====
-    const reachRadius = (timeLimit / 60) * 40 * 1000 * 0.5; // 片道なので /2
+
 
     // ===== 時間のフォーマット（表示用） =====
     const formatTime = (mins: number) => {
-        if (mins < 60) return { value: String(mins), unit: 'min' };
         const h = Math.floor(mins / 60);
         const m = mins % 60;
-        return { value: m > 0 ? `${h}:${String(m).padStart(2, '0')}` : String(h), unit: m > 0 ? 'h' : 'h' };
+        return { value: `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`, unit: '' };
     };
 
     const timeDisplay = formatTime(timeLimit);
@@ -195,21 +190,6 @@ function ExplorePage() {
                             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                         />
                         <RecenterMap lat={userLocation.lat} lng={userLocation.lng} />
-
-                        {/* 到達可能範囲サークル（結果表示前のみ） */}
-                        {routeResults === null && (
-                            <Circle
-                                center={[userLocation.lat, userLocation.lng]}
-                                radius={reachRadius}
-                                pathOptions={{
-                                    color: '#D4AF37',
-                                    fillColor: '#D4AF37',
-                                    fillOpacity: 0.05,
-                                    weight: 1,
-                                    dashArray: '4 8',
-                                }}
-                            />
-                        )}
 
                         {/* ルートのポリライン */}
                         {activeRouteResult && polylinePositions.length > 0 && (
@@ -285,20 +265,17 @@ function ExplorePage() {
                 <div className="explore-panel">
                     {/* タイムセレクター */}
                     <div className="time-selector">
-                        <div className="time-selector-label">TIME LIMIT</div>
+                        <div className="time-selector-label">所用時間</div>
                         <div className="time-display">
                             <span className="time-value">{timeDisplay.value}</span>
                             <span className="time-unit">{timeDisplay.unit}</span>
                         </div>
-                        <input
-                            ref={sliderRef}
-                            type="range"
-                            className="time-slider"
+                        <TouchSlider
                             min={30}
-                            max={180}
+                            max={300}
                             step={30}
                             value={timeLimit}
-                            onChange={(e) => setTimeLimit(Number(e.target.value))}
+                            onChange={(val) => setTimeLimit(val)}
                         />
                         <div className="time-presets">
                             {TIME_PRESETS.map((p) => (
@@ -337,7 +314,7 @@ function ExplorePage() {
             {activeRouteResult && routeResults && (
                 <div className="result-panel">
                     <div className="result-header">
-                        <h2 className="result-title">ROUTES ({routeResults.length})</h2>
+                        <h2 className="result-title">{routeResults.length}件のルートが見つかりました</h2>
                         <button className="result-close-btn" onClick={handleCloseResult}>
                             ✕
                         </button>
@@ -354,7 +331,7 @@ function ExplorePage() {
                                 >
                                     <div className="carousel-card-title">{res.route.title}</div>
                                     <div className="carousel-card-stats">
-                                        {res.route.total_distance_km?.toFixed(1) ?? '--'} km / {res.route.time_limit_minutes} min
+                                        {res.route.total_distance_km?.toFixed(1) ?? '--'} km / {formatTime(res.route.time_limit_minutes).value}
                                     </div>
                                 </div>
                             ))}
@@ -374,9 +351,8 @@ function ExplorePage() {
                         </div>
                         <div className="result-stat">
                             <span className="result-stat-value">
-                                {activeRouteResult.route.time_limit_minutes}
+                                {formatTime(activeRouteResult.route.time_limit_minutes).value}
                             </span>
-                            <span className="result-stat-label">min</span>
                         </div>
                     </div>
 

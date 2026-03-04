@@ -73,13 +73,31 @@
     align-items: center;
     justify-content: center;
     padding: 2rem;
+    position: relative;
+}
+
+.upload-container::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    /* Cinematic dummy image for upload background */
+    background: linear-gradient(to bottom, rgba(13, 17, 23, 0.4) 0%, rgba(13, 17, 23, 0.9) 60%, rgba(13, 17, 23, 1) 100%),
+        url('https://images.unsplash.com/photo-1623055406086-630ad82791cc?w=800&q=80') center center / cover no-repeat;
+    filter: blur(8px);
+    z-index: 1;
+    pointer-events: none;
 }
 
 .upload-box {
-    border: 1px solid rgba(212, 175, 55, 0.2);
-    /* Antique Gold base border */
-    border-radius: 4px;
-    /* シャープに */
+    position: relative;
+    z-index: 2;
+    border: 1px solid rgba(212, 175, 55, 0.3);
+    /* Glassmorphism background */
+    background: rgba(13, 17, 23, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 8px;
+    /* Slightly more rounded for glass pane */
     padding: 3.5rem 2rem;
     text-align: center;
     cursor: pointer;
@@ -99,10 +117,20 @@
 }
 
 .upload-icon {
-    font-size: 2.5rem;
+    display: flex;
+    justify-content: center;
     color: #D4AF37;
     margin-bottom: 1.5rem;
-    font-weight: 300;
+    filter: drop-shadow(0 0 10px rgba(212, 175, 55, 0.4));
+}
+
+.upload-action-hint {
+    font-size: 0.75rem;
+    color: #D4AF37;
+    margin-top: 2rem;
+    letter-spacing: 0.2em;
+    font-family: 'Inter', 'Roboto Mono', monospace;
+    opacity: 0.8;
 }
 
 .hidden-file-input {
@@ -164,7 +192,8 @@
     font-size: 0.75rem;
     font-weight: 300;
     letter-spacing: 0.15em;
-    color: #8B949E;
+    color: #161B22;
+    background-color: #8B949E;
     cursor: pointer;
     transition: all 0.2s ease;
     font-family: 'Inter', monospace;
@@ -419,4 +448,37 @@
 /* Hidden canvas for export */
 .export-canvas {
     display: none;
+}
+
+/* --- Mobile / Responsive --- */
+@media (max-width: 768px) {
+    .create-header {
+        padding: 1.5rem 1rem 1rem;
+    }
+
+    .upload-container {
+        padding: 1.5rem 1rem 8rem 1rem;
+    }
+
+    .upload-box {
+        padding: 2.5rem 1.5rem;
+    }
+
+    .image-selector {
+        padding: 0 1rem 1rem 1rem;
+    }
+
+    .toolbar-section {
+        padding: 1.5rem 1rem;
+    }
+
+    .action-buttons {
+        padding: 0 1rem;
+    }
+
+    .create-page .btn-primary,
+    .create-page .btn-secondary {
+        padding: 14px 20px;
+        /* Bigger touch targets */
+    }
 }
