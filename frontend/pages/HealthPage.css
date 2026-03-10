@@ -21,7 +21,7 @@
 /* Header */
 .health-header {
     display: flex;
-    justify-content: space-between;
+    justify-content: center;
     align-items: center;
     padding: 1.5rem 1.5rem 0.5rem;
     z-index: 10;
@@ -56,7 +56,7 @@
 .health-title {
     margin: 0;
     font-size: 1.2rem;
-    font-weight: 300;
+    font-weight: 700;
     letter-spacing: 0.1em;
     color: #e6e6e6;
 }

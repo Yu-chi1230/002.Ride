@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { supabase } from '../src/lib/supabase';
 import { apiFetch } from '../src/lib/api';
 import { VEHICLE_MAKERS } from '../src/constants/vehicleMakers';
+import ReactMarkdown from 'react-markdown';
+import termsText from '@docs/利用規約.md?raw';
+import privacyText from '@docs/ride_プライバシーポリシー.md?raw';
 import './OnboardingPage.css';
 
 function OnboardingPage() {
@@ -24,6 +27,9 @@ function OnboardingPage() {
 
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [showTermsModal, setShowTermsModal] = useState(false);
+    const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+    const [isAgreed, setIsAgreed] = useState(false);
 
     const handleNext = () => {
         const { lastName, firstName, displayName, email, password, confirmPassword } = formData;
@@ -31,6 +37,14 @@ function OnboardingPage() {
             alert('すべてのユーザープロフィール項目を入力してください。');
             return;
         }
+
+        // パスワードのバリデーション（8文字以上、半角英数字を含む）
+        const passwordRegex = /^(?=.*[a-zA-Z])(?=.*\d).{8,}$/;
+        if (!passwordRegex.test(password)) {
+            alert('パスワードは8文字以上で、英字と数字をそれぞれ1文字以上含める必要があります。');
+            return;
+        }
+
         if (password !== confirmPassword) {
             alert('パスワードが一致しません。もう一度確認してください。');
             return;
@@ -49,6 +63,11 @@ function OnboardingPage() {
 
         if (!formData.vehicleMaker.trim() || !formData.vehicleName.trim()) {
             alert('車両メーカーと車両名を入力してください。');
+            return;
+        }
+
+        if (!isAgreed) {
+            alert('利用規約およびプライバシーポリシーに同意してください。');
             return;
         }
 
@@ -267,6 +286,21 @@ function OnboardingPage() {
                                         placeholder="e.g. CB400SF"
                                     />
                                 </div>
+                                <div className="onboarding-agreement">
+                                    <label className="checkbox-label">
+                                        <input
+                                            type="checkbox"
+                                            checked={isAgreed}
+                                            onChange={(e) => setIsAgreed(e.target.checked)}
+                                        />
+                                        <span>
+                                            <button type="button" className="text-link" onClick={() => setShowTermsModal(true)}>利用規約</button>
+                                            および
+                                            <button type="button" className="text-link" onClick={() => setShowPrivacyModal(true)}>プライバシーポリシー</button>
+                                            に同意する
+                                        </span>
+                                    </label>
+                                </div>
                                 <div className="form-actions split">
                                     <button type="button" className="btn-secondary" onClick={handleBack}>
                                         戻る
@@ -284,6 +318,34 @@ function OnboardingPage() {
                     </div>
                 </div>
             </div>
+            {/* Modals */}
+            {showTermsModal && (
+                <div className="onboarding-modal-overlay">
+                    <div className="onboarding-modal-content fade-in">
+                        <div className="onboarding-modal-header">
+                            <h2>利用規約</h2>
+                            <button className="onboarding-modal-close" onClick={() => setShowTermsModal(false)}>×</button>
+                        </div>
+                        <div className="onboarding-modal-body markdown-body">
+                            <ReactMarkdown>{termsText}</ReactMarkdown>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showPrivacyModal && (
+                <div className="onboarding-modal-overlay">
+                    <div className="onboarding-modal-content fade-in">
+                        <div className="onboarding-modal-header">
+                            <h2>プライバシーポリシー</h2>
+                            <button className="onboarding-modal-close" onClick={() => setShowPrivacyModal(false)}>×</button>
+                        </div>
+                        <div className="onboarding-modal-body markdown-body">
+                            <ReactMarkdown>{privacyText}</ReactMarkdown>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

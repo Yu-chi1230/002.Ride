@@ -1,5 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import Cropper from 'react-easy-crop';
+import getCroppedImg from '../src/lib/cropImage';
 import { useAuth } from '../src/contexts/AuthContext';
 import { apiFetch } from '../src/lib/api';
 import BottomNav from '../components/BottomNav';
@@ -23,6 +25,13 @@ function SettingPage() {
         vehicle_maker: '',
         vehicle_model_name: ''
     });
+
+    // Cropper states
+    const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
+    const [crop, setCrop] = useState({ x: 0, y: 0 });
+    const [zoom, setZoom] = useState(1);
+    const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
+    const [isCropping, setIsCropping] = useState(false);
 
     // Populate form data once profileData is loaded
     useEffect(() => {
@@ -79,6 +88,27 @@ function SettingPage() {
 
         const reader = new FileReader();
         reader.onload = (event) => {
+            setCropImageSrc(event.target?.result as string);
+            setIsCropping(true);
+        };
+        reader.readAsDataURL(file);
+
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+    };
+
+    const onCropComplete = (_croppedArea: any, croppedAreaPixels: any) => {
+        setCroppedAreaPixels(croppedAreaPixels);
+    };
+
+    const handleCropSave = async () => {
+        if (!cropImageSrc || !croppedAreaPixels) return;
+
+        try {
+            setIsLoading(true);
+            const croppedImageBlobUrl = await getCroppedImg(cropImageSrc, croppedAreaPixels);
+
             const img = new Image();
             img.onload = () => {
                 const canvas = document.createElement('canvas');
@@ -112,13 +142,18 @@ function SettingPage() {
                     console.error('LocalStorage quota exceeded', err);
                     setMessage({ text: '画像サイズが大きすぎます。', type: 'error' });
                 }
-            };
-            img.src = event.target?.result as string;
-        };
-        reader.readAsDataURL(file);
 
-        if (fileInputRef.current) {
-            fileInputRef.current.value = '';
+                setIsCropping(false);
+                setCropImageSrc(null);
+                setIsLoading(false);
+            };
+            img.src = croppedImageBlobUrl;
+        } catch (e) {
+            console.error(e);
+            setMessage({ text: '画像の切り抜きに失敗しました。', type: 'error' });
+            setIsCropping(false);
+            setCropImageSrc(null);
+            setIsLoading(false);
         }
     };
 
@@ -348,6 +383,42 @@ function SettingPage() {
             </div>
 
             <BottomNav />
+
+            {/* Cropper Modal */}
+            {isCropping && cropImageSrc && (
+                <div className="cropper-modal">
+                    <div className="cropper-header">
+                        <button className="cropper-cancel-btn" onClick={() => { setIsCropping(false); setCropImageSrc(null); }}>キャンセル</button>
+                        <h2 className="cropper-title">背景画像の位置調整</h2>
+                        <button className="cropper-save-btn" onClick={handleCropSave} disabled={isLoading}>完了</button>
+                    </div>
+                    <div className="cropper-body">
+                        <div className="cropper-container">
+                            <Cropper
+                                image={cropImageSrc}
+                                crop={crop}
+                                zoom={zoom}
+                                aspect={9 / 16}
+                                onCropChange={setCrop}
+                                onCropComplete={onCropComplete}
+                                onZoomChange={setZoom}
+                            />
+                        </div>
+                        <div className="cropper-controls">
+                            <input
+                                type="range"
+                                value={zoom}
+                                min={1}
+                                max={3}
+                                step={0.1}
+                                aria-labelledby="Zoom"
+                                onChange={(e) => setZoom(Number(e.target.value))}
+                                className="zoom-range"
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

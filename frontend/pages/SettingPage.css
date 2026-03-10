@@ -161,3 +161,107 @@
     margin-bottom: 1rem;
     line-height: 1.4;
 }
+
+/* Cropper Modal */
+.cropper-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: #0d1117;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+}
+
+.cropper-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    background: rgba(22, 27, 34, 0.9);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    height: 60px;
+}
+
+.cropper-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #E6EDF3;
+    margin: 0;
+}
+
+.cropper-cancel-btn {
+    background: none;
+    border: none;
+    color: #8B949E;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.cropper-save-btn {
+    background: none;
+    border: none;
+    color: #D4AF37;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.cropper-save-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.cropper-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+.cropper-container {
+    position: relative;
+    flex: 1;
+    background: #000;
+}
+
+.cropper-controls {
+    padding: 1.5rem;
+    background: #0d1117;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.zoom-range {
+    width: 80%;
+    max-width: 400px;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 4px;
+    background: #30363d;
+    border-radius: 2px;
+    outline: none;
+}
+
+.zoom-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #D4AF37;
+    cursor: pointer;
+}
+
+.zoom-range::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #D4AF37;
+    cursor: pointer;
+    border: none;
+}

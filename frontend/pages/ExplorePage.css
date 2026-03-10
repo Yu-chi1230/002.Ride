@@ -621,7 +621,7 @@
 }
 
 .carousel-card-title {
-    font-size: 1.1rem;
+    font-size: 1.0rem;
     font-weight: 300;
     letter-spacing: 0.05em;
     color: #E6EDF3;
@@ -647,7 +647,7 @@
 }
 
 .active-route-title {
-    font-size: 1.3rem;
+    font-size: 1.0rem;
     font-weight: 300;
     color: #E6EDF3;
     line-height: 1.5;

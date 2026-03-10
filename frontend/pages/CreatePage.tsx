@@ -1,5 +1,4 @@
-import { useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useRef } from 'react';
 import { ImagePlus } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
 import './CreatePage.css';
@@ -39,8 +38,6 @@ const THEMES = [
 ];
 
 function CreatePage() {
-    const navigate = useNavigate();
-
     // State
     const [previewUrls, setPreviewUrls] = useState<string[]>([]);
     const [selectedImageIndex, setSelectedImageIndex] = useState(0);
@@ -52,8 +49,6 @@ function CreatePage() {
     const replaceInputRef = useRef<HTMLInputElement>(null);
     const imageRef = useRef<HTMLImageElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
-
-    // ========== Handlers ==========
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
@@ -166,61 +161,43 @@ function CreatePage() {
     return (
         <div className="create-page">
             <header className="create-header">
-                <button
-                    className="create-back-btn"
-                    onClick={() => {
-                        if (previewUrls.length > 0) {
-                            // Return to upload state
-                            setPreviewUrls([]);
-                        } else {
-                            // Leave page
-                            navigate('/home');
-                        }
-                    }}
-                >
-                    ←
-                </button>
-                <div className="create-title">CINEMATIC EDITOR</div>
-                <div className="create-header-spacer" />
+                {selectedThemeId !== 'original' && previewUrls.length > 0 && (
+                    <div className="badge-before" style={{ position: 'relative', bottom: 0, left: 0, opacity: sliderValue > 20 ? 1 : 0 }}>BEFORE</div>
+                )}
+
+                <h1 className="create-title">CINEMATIC EDITOR</h1>
+
+                {selectedThemeId !== 'original' && previewUrls.length > 0 && (
+                    <div className="badge-after" style={{ position: 'relative', bottom: 0, right: 0, opacity: sliderValue < 80 ? 1 : 0 }}>AFTER</div>
+                )}
             </header>
 
-            {previewUrls.length === 0 ? (
-                // 1. Upload State
-                <div className="upload-container">
-                    {/* 背景用のシネマティック画像（CSS側で扱うか、ここでimgタグで敷くかですが、今回はCSSの背景に任せます） */}
-
-                    <div className="upload-box" onClick={() => fileInputRef.current?.click()}>
-                        <div className="upload-icon">
-                            <ImagePlus strokeWidth={1.5} size={48} />
+            {/* Always show Editor State */}
+            <div className="editor-container">
+                {/* Main View Area: Either Image or Upload Button */}
+                <div className="viewport-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {previewUrls.length === 0 ? (
+                        <div
+                            className="upload-box"
+                            onClick={() => fileInputRef.current?.click()}
+                            style={{ width: '100%', aspectRatio: '16/9', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: '1px dashed rgba(255,255,255,0.2)', backgroundColor: 'rgba(13, 17, 23, 0.5)' }}
+                        >
+                            <div className="upload-icon" style={{ marginBottom: '1rem', color: '#8B949E' }}>
+                                <ImagePlus strokeWidth={1.5} size={48} />
+                            </div>
+                            <div style={{ fontSize: '1.2rem', fontWeight: 300, marginBottom: '0.8rem', letterSpacing: '0.15em', color: '#E6EDF3' }}>ADD PHOTOS</div>
+                            <div style={{ fontSize: '0.9rem', color: '#8B949E', fontWeight: 300, letterSpacing: '0.05em', lineHeight: 1.6, textAlign: 'center' }}>
+                                タップして画像を選択
+                            </div>
                         </div>
-                        <div style={{ fontSize: '1.2rem', fontWeight: 300, marginBottom: '0.8rem', letterSpacing: '0.15em' }}>ADD PHOTOS</div>
-                        <div style={{ fontSize: '0.9rem', color: '#8B949E', fontWeight: 300, letterSpacing: '0.05em', lineHeight: 1.6 }}>
-                            愛車を、映画のワンシーンに。<br />
-                            独自のカラーグレーディングで、<br />
-                            何気ない一枚を特別な作品へ。
-                        </div>
-
-                        <div className="upload-action-hint">
-                            TAP TO SELECT
-                        </div>
-                    </div>
-                </div>
-            ) : (
-                // 2. Editor State
-                <div className="editor-container">
-                    {/* Main Before/After View */}
-                    <div className="viewport-container">
+                    ) : (
                         <div className="comparison-wrapper">
                             {/* Background Image (Before) */}
                             <img
                                 src={currentImageUrl}
                                 alt="Before"
                                 className="img-before"
-                                ref={imageRef}
-                                style={{
-                                    // Make sure it doesn't have the filter
-                                    filter: 'none'
-                                }}
+                                style={{ filter: 'none' }}
                             />
 
                             {/* Foreground Image (After) - Clipped based on slider */}
@@ -237,10 +214,8 @@ function CreatePage() {
                             {/* Slider UI */}
                             {selectedThemeId !== 'original' && (
                                 <>
-                                    <div className="badge-before" style={{ opacity: sliderValue > 20 ? 1 : 0 }}>BEFORE</div>
-                                    <div className="badge-after" style={{ opacity: sliderValue < 80 ? 1 : 0 }}>AFTER</div>
-
                                     <div className="slider-handle-line" style={{ left: `${sliderValue}%` }} />
+                                    {/* Make sure the visual button has pointer-events: none in CSS */}
                                     <div className="slider-handle-button" style={{ left: `${sliderValue}%` }}>
                                         <span style={{ transform: 'scaleX(1.5)', display: 'inline-block' }}>|</span>
                                     </div>
@@ -255,113 +230,112 @@ function CreatePage() {
                                 </>
                             )}
                         </div>
-                    </div>
+                    )}
+                </div>
 
-                    {/* Thumbnail Selector & Actions */}
-                    {previewUrls.length > 0 && (
-                        <div className="toolbar-section" style={{ marginTop: '1.5rem', marginBottom: '0.5rem' }}>
-                            <div className="section-label">SELECTED PICTURES</div>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingLeft: '1.2rem', paddingRight: '1.2rem' }}>
-                                <div className="image-selector" style={{ padding: '0 0 1rem 0', flex: 1, margin: 0 }}>
-                                    {previewUrls.map((url, idx) => (
-                                        <img
-                                            key={idx}
-                                            src={url}
-                                            alt={`thumb ${idx}`}
-                                            className={`thumb-item ${selectedImageIndex === idx ? 'active' : ''}`}
-                                            onClick={() => {
-                                                setSelectedImageIndex(idx);
-                                                setSliderValue(50); // reset slider for new image
-                                            }}
-                                        />
-                                    ))}
-                                    {/* Simple add button for more photos */}
-                                    <div
-                                        className="thumb-item"
-                                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: '1px solid rgba(212, 175, 55, 0.3)', color: '#D4AF37', fontSize: '1.2rem', opacity: 1, fontWeight: 300 }}
-                                        onClick={() => fileInputRef.current?.click()}
-                                    >
-                                        +
-                                    </div>
-                                </div>
-
-                                {/* Action buttons for current image */}
-                                <div className="current-image-actions" style={{
-                                    flexShrink: 0,
-                                    padding: '0 0 1rem 1rem',
-                                    margin: 0,
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    alignItems: 'stretch',
-                                    justifyContent: 'space-between',
-                                    height: '60px', /* Match thumb-item height */
-                                    gap: '0.4rem'
-                                }}>
-                                    <span className="action-text-btn" onClick={() => replaceInputRef.current?.click()} style={{
-                                        flex: 1,
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        padding: '0 0.8rem',
-                                        borderRadius: '2px',
-                                        fontSize: '0.7rem'
-                                    }}>
-                                        CHANGE
-                                    </span>
-                                    <span className="action-text-btn action-danger" onClick={handleRemoveImage} style={{
-                                        flex: 1,
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        padding: '0 0.8rem',
-                                        borderRadius: '2px',
-                                        fontSize: '0.7rem',
-                                        backgroundColor: 'rgba(229, 83, 75, 0.1)',
-                                        color: '#E5534B'
-                                    }}>
-                                        REMOVE
-                                    </span>
+                {/* Thumbnail Selector & Actions */}
+                {previewUrls.length > 0 && (
+                    <div className="toolbar-section">
+                        <div className="section-label">SELECTED PICTURES</div>
+                        <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                            <div className="image-selector" style={{ margin: 0, paddingLeft: '1.2rem', paddingRight: '0.4rem', flex: 1, minWidth: 0 }}>
+                                {previewUrls.map((url, idx) => (
+                                    <img
+                                        key={idx}
+                                        src={url}
+                                        alt={`thumb ${idx}`}
+                                        className={`thumb-item ${selectedImageIndex === idx ? 'active' : ''}`}
+                                        onClick={() => {
+                                            setSelectedImageIndex(idx);
+                                            setSliderValue(50); // reset slider for new image
+                                        }}
+                                    />
+                                ))}
+                                {/* Simple add button for more photos */}
+                                <div
+                                    className="thumb-item"
+                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: '1px solid rgba(212, 175, 55, 0.3)', color: '#D4AF37', fontSize: '1.2rem', opacity: 1, fontWeight: 300, flexShrink: 0 }}
+                                    onClick={() => fileInputRef.current?.click()}
+                                >
+                                    +
                                 </div>
                             </div>
-                        </div>
-                    )}
-
-                    {/* Themes Tool bar */}
-                    <div className="toolbar-section">
-                        <div className="section-label">COLOR GRADING PRESETS</div>
-                        <div className="theme-scroller">
-                            {THEMES.map(theme => (
-                                <div
-                                    key={theme.id}
-                                    className={`theme-card ${selectedThemeId === theme.id ? 'active' : ''}`}
-                                    style={{ backgroundImage: `url(${theme.img})` }}
-                                    onClick={() => setSelectedThemeId(theme.id)}
-                                >
-                                    <div className="theme-card-overlay" />
-                                    <div className="theme-card-title">{theme.name}</div>
-                                </div>
-                            ))}
+                            {/* Action buttons for current image */}
+                            <div className="current-image-actions" style={{
+                                flexShrink: 0,
+                                margin: 0,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'stretch',
+                                justifyContent: 'space-between',
+                                height: '60px', /* Match thumb-item height */
+                                gap: '0.4rem',
+                                paddingLeft: '0.8rem'
+                            }}>
+                                <span className="action-text-btn" onClick={() => replaceInputRef.current?.click()} style={{
+                                    flex: 1,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    padding: '0 0.8rem',
+                                    borderRadius: '2px',
+                                    fontSize: '0.7rem'
+                                }}>
+                                    CHANGE
+                                </span>
+                                <span className="action-text-btn action-danger" onClick={handleRemoveImage} style={{
+                                    flex: 1,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    padding: '0 0.8rem',
+                                    borderRadius: '2px',
+                                    fontSize: '0.7rem',
+                                    backgroundColor: 'rgba(229, 83, 75, 0.1)',
+                                    color: '#E5534B'
+                                }}>
+                                    REMOVE
+                                </span>
+                            </div>
                         </div>
                     </div>
+                )}
 
-                    {/* Actions */}
-                    <div className="action-buttons">
-                        <button
-                            className="btn-primary"
-                            onClick={handleDownload}
-                            disabled={isExporting}
-                        >
-                            {isExporting ? '保存中...' : '画像を保存する'}
-                        </button>
-                        <button className="btn-secondary">
-                            シェアする
-                        </button>
+                {/* Themes Tool bar */}
+                <div className="toolbar-section">
+                    <div className="section-label">COLOR GRADING PRESETS</div>
+                    <div className="theme-scroller">
+                        {THEMES.map(theme => (
+                            <div
+                                key={theme.id}
+                                className={`theme-card ${selectedThemeId === theme.id ? 'active' : ''}`}
+                                style={{ backgroundImage: `url(${theme.img})` }}
+                                onClick={() => setSelectedThemeId(theme.id)}
+                            >
+                                <div className="theme-card-overlay" />
+                                <div className="theme-card-title">{theme.name}</div>
+                            </div>
+                        ))}
                     </div>
-
-                    {/* Hidden canvas for export */}
-                    <canvas ref={canvasRef} className="export-canvas" />
                 </div>
-            )}
+
+                {/* Actions */}
+                <div className="action-buttons">
+                    <button
+                        className="btn-primary"
+                        onClick={handleDownload}
+                        disabled={isExporting || previewUrls.length === 0}
+                    >
+                        {isExporting ? '保存中...' : '画像を保存する'}
+                    </button>
+                    <button className="btn-secondary" disabled={previewUrls.length === 0}>
+                        シェアする
+                    </button>
+                </div>
+
+                {/* Hidden canvas for export */}
+                <canvas ref={canvasRef} className="export-canvas" />
+            </div>
 
             {/* Hidden file input for uploads */}
             <input
@@ -382,7 +356,7 @@ function CreatePage() {
                 onChange={handleReplaceSelect}
             />
 
-            {previewUrls.length === 0 && <BottomNav />}
+            <BottomNav />
         </div>
     );
 }

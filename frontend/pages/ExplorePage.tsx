@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import BottomNav from '../components/BottomNav';
@@ -81,6 +81,7 @@ const TIME_PRESETS = [
 // ===== メインコンポーネント =====
 function ExplorePage() {
     const navigate = useNavigate();
+    const location = useLocation();
 
     // 状態管理
     const [timeLimit, setTimeLimit] = useState(() => parseInt(localStorage.getItem('default_riding_time') || '60', 10));
@@ -89,6 +90,36 @@ function ExplorePage() {
     const [isSearching, setIsSearching] = useState(false);
     const [routeResults, setRouteResults] = useState<RouteResult[] | null>(null);
     const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
+    const [isPredefinedRoute, setIsPredefinedRoute] = useState(false);
+
+    // Provide pre-defined route via location state
+    useEffect(() => {
+        if (location.state && location.state.predefinedRoute) {
+            const preRoute = location.state.predefinedRoute;
+            // Expected format map, handles any slight differences
+            const formattedResult: RouteResult = {
+                route: {
+                    id: preRoute.id,
+                    title: preRoute.title,
+                    time_limit_minutes: preRoute.time_limit_minutes,
+                    total_distance_km: preRoute.total_distance_km,
+                },
+                waypoints: preRoute.waypoints || [],
+                cinematic_spots: preRoute.cinematic_spots || [],
+            };
+            setRouteResults([formattedResult]);
+            setSelectedRouteIndex(0);
+            setIsPredefinedRoute(true);
+
+            if (preRoute.waypoints && preRoute.waypoints.length > 0) {
+                const firstWp = preRoute.waypoints[0];
+                setUserLocation({ lat: firstWp.latitude, lng: firstWp.longitude });
+            }
+
+            // Clear state so reload doesn't keep it forever
+            window.history.replaceState({}, document.title);
+        }
+    }, [location.state]);
 
     const activeRouteResult = routeResults?.[selectedRouteIndex] ?? null;
 
@@ -140,6 +171,7 @@ function ExplorePage() {
                 const json = await res.json();
                 setRouteResults(json.data.routes || []);
                 setSelectedRouteIndex(0);
+                setIsPredefinedRoute(false);
             } else {
                 console.error('Route search failed:', res.status);
             }
@@ -167,10 +199,10 @@ function ExplorePage() {
 
     const timeDisplay = formatTime(timeLimit);
 
-    // ===== 結果を閉じる =====
     const handleCloseResult = () => {
         setRouteResults(null);
         setSelectedRouteIndex(0);
+        setIsPredefinedRoute(false);
     };
 
     return (
@@ -226,9 +258,6 @@ function ExplorePage() {
 
             {/* ===== ヘッダー ===== */}
             <div className="explore-header">
-                <button className="explore-back-btn" onClick={() => navigate('/home')}>
-                    ←
-                </button>
                 <div className="explore-header-spacer" />
             </div>
 
@@ -314,7 +343,9 @@ function ExplorePage() {
             {activeRouteResult && routeResults && (
                 <div className="result-panel">
                     <div className="result-header">
-                        <h2 className="result-title">{routeResults.length}件のルートが見つかりました</h2>
+                        <h2 className="result-title">
+                            {isPredefinedRoute ? "おすすめルート" : `${routeResults.length}件のルートが見つかりました`}
+                        </h2>
                         <button className="result-close-btn" onClick={handleCloseResult}>
                             ✕
                         </button>

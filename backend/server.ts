@@ -431,7 +431,7 @@ app.post('/api/explore/routes', requireAuth, async (req: AuthRequest, res: Respo
                     data: {
                         user_id: userId,
                         vehicle_id: vehicle?.id ?? null,
-                        title: proposal.title,
+                        title: proposal.title ? proposal.title.slice(0, 15) : "新規ルート",
                         time_limit_minutes: time_limit_minutes,
                         total_distance_km: estimatedDistanceKm,
                     }

@@ -25,6 +25,8 @@
     align-items: center;
     z-index: 10;
     position: relative;
+    height: 60px;
+    /* 固定高さを設けてレイアウトを安定させる */
 }
 
 .create-back-btn {
@@ -52,13 +54,16 @@
 }
 
 .create-title {
-    font-size: 1rem;
-    font-weight: 300;
-    letter-spacing: 0.25em;
+    font-size: 1.2rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
     /* 広く */
     text-transform: uppercase;
     color: #E6EDF3;
     font-family: 'Inter', 'Roboto Mono', monospace;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
 }
 
 .create-header-spacer {
@@ -142,20 +147,40 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-    padding-bottom: 2rem;
-    /* space at bottom */
+    overflow-y: auto;
+    /* overflow-xは指定しない — .create-pageのoverflow:hiddenで制御 */
+    /* clipはiOS Safari 15以下で非対応のため使用不可 */
+    padding-bottom: 90px;
+    /* Leave space for BottomNav so it doesn't overlap actions */
+    -webkit-overflow-scrolling: touch;
 }
 
 /* Image Selector */
 .image-selector {
     display: flex;
+    flex-wrap: nowrap;
     gap: 0.8rem;
     padding: 0 1.2rem 1rem 1.2rem;
     overflow-x: auto;
+    overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
+    /* Smooth scrolling on iOS */
+    overscroll-behavior-x: contain;
+    /* 左右スワイプ時のブラウザバックを防ぐ */
+    touch-action: pan-x;
+    /* スマホで横スワイプを明示的に許可する */
+    scrollbar-width: none;
+    /* Firefox */
     min-height: 70px;
-    /* Reserve space */
+    align-items: center;
+    /* Ensure items align nicely when scrolling */
+    width: 100%;
+    min-width: 0;
+}
+
+.image-selector::-webkit-scrollbar {
+    display: none;
+    /* Safari and Chrome */
 }
 
 .thumb-item {
@@ -217,7 +242,10 @@
 .viewport-container {
     position: relative;
     width: 100%;
-    flex: 1;
+    flex: 1 1 0;
+    /* 残りスペースを全て使う。兄弟が増えたら縮む */
+    min-height: 160px;
+    /* 最低限の高さだけ確保 */
     display: flex;
     align-items: center;
     justify-content: center;
@@ -233,6 +261,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    touch-action: none;
+    /* スマホやブラウザでのスワイプ・スクロール操作を完全に防ぎ、内部のPointerEventに専念させる */
 }
 
 /* The base image (Before) */
@@ -287,67 +317,131 @@
     box-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
     font-family: 'Inter', sans-serif;
     font-weight: 300;
+    pointer-events: none;
+    /* タッチイベントを奪わないようにする（背後のinput[range]に届かせる） */
+    z-index: 10;
 }
 
+/* Native Range Slider — transparent overlay for touch drag */
 .comparison-slider {
     position: absolute;
-    inset: 0;
+    top: 0;
+    left: 0;
     width: 100%;
     height: 100%;
-    opacity: 0;
-    z-index: 20;
-    cursor: ew-resize;
     margin: 0;
+    padding: 0;
+    opacity: 0;
+    /* 完全に透明（ビジュアルは slider-handle-line/button が担当） */
+    z-index: 20;
+    /* ハンドルボタン（z-index: 10）より上に配置 */
+    cursor: ew-resize;
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    touch-action: pan-x;
+    /* 横スワイプのみ許可（縦スクロールはブロック） */
+    pointer-events: auto;
+    /* タッチ・マウスイベントを受ける */
+}
+
+/* スライダーのつまみ（Chrome, Safari, Edge） */
+.comparison-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 44px;
+    /* モバイルで押しやすい大きさ */
+    height: 44px;
+    background: transparent;
+    cursor: ew-resize;
+}
+
+/* スライダーのつまみ（Firefox） */
+.comparison-slider::-moz-range-thumb {
+    width: 44px;
+    height: 44px;
+    background: transparent;
+    border: none;
+    cursor: ew-resize;
+}
+
+/* トラック非表示（Chrome, Safari, Edge） */
+.comparison-slider::-webkit-slider-runnable-track {
+    background: transparent;
+}
+
+/* トラック非表示（Firefox） */
+.comparison-slider::-moz-range-track {
+    background: transparent;
 }
 
 /* Badges */
 .badge-before,
 .badge-after {
-    position: absolute;
-    bottom: 2rem;
-    padding: 0.3rem 0.8rem;
+    padding: 0.2rem 0.6rem;
     background: transparent;
     border: 1px solid rgba(230, 237, 243, 0.3);
     border-radius: 2px;
-    font-size: 0.65rem;
-    letter-spacing: 0.2em;
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
     color: #E6EDF3;
     z-index: 5;
     pointer-events: none;
     font-family: 'Inter', 'Roboto Mono', monospace;
     font-weight: 300;
+    transition: opacity 0.2s ease;
 }
 
 .badge-before {
-    left: 1rem;
+    margin-right: auto;
 }
 
 .badge-after {
-    right: 1rem;
+    margin-left: auto;
 }
 
 /* Themes Tool bar */
 .toolbar-section {
-    padding: 1.5rem 1.2rem;
+    padding: 1.2rem 0 0.5rem 0;
+    /* 左右のパディングを削除し、スクロール可能な子要素が端から端まで使えるようにする */
     background: linear-gradient(to top, rgba(13, 17, 23, 1), rgba(13, 17, 23, 0));
+    flex-shrink: 0;
+    overflow: visible;
 }
 
 .section-label {
-    font-size: 0.75rem;
+    font-size: 0.6rem;
     letter-spacing: 0.2em;
     color: #8B949E;
-    margin-bottom: 1rem;
+    margin-bottom: 0.5rem;
     text-transform: uppercase;
     font-family: 'Inter', 'Roboto Mono', monospace;
     font-weight: 300;
+    padding-left: 1.2rem;
 }
 
 .theme-scroller {
     display: flex;
+    flex-wrap: nowrap;
     gap: 0.8rem;
+    padding: 0.5rem 1rem 1rem 1rem;
+    /* 上に余白を追加してアクティブ時の浮き分を確保 */
     overflow-x: auto;
-    padding-bottom: 1rem;
+    overflow-y: visible;
+    /* アクティブカードのtranslateY(-2px)を見切れさせない */
     -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    touch-action: pan-x;
+    /* スマホで横スワイプを明示的に許可する */
+    scrollbar-width: none;
+    /* Firefox */
+    width: 100%;
+    min-width: 0;
+}
+
+.theme-scroller::-webkit-scrollbar {
+    display: none;
+    /* Chrome, Safari, Edge */
 }
 
 .theme-card {
@@ -396,7 +490,8 @@
     display: flex;
     gap: 1rem;
     padding: 0 1.2rem;
-    margin-bottom: 1rem;
+    margin-bottom: 2rem;
+    flex-shrink: 0;
 }
 
 .create-page .btn-primary,
@@ -469,7 +564,7 @@
     }
 
     .toolbar-section {
-        padding: 1.5rem 1rem;
+        padding: 0.25rem 0.75rem;
     }
 
     .action-buttons {
@@ -479,6 +574,5 @@
     .create-page .btn-primary,
     .create-page .btn-secondary {
         padding: 14px 20px;
-        /* Bigger touch targets */
     }
 }

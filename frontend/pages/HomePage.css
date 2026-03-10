@@ -23,7 +23,7 @@
     width: 100%;
     height: 100%;
     /* 仮の愛車画像を背景に置き、下に向かって背景色と馴染ませる */
-    background: linear-gradient(to bottom, rgba(13, 17, 23, 0.1) 0%, rgba(13, 17, 23, 0.9) 60%, rgba(13, 17, 23, 1) 100%),
+    background: linear-gradient(to bottom, rgba(13, 17, 23, 0.0) 0%, rgba(13, 17, 23, 0.7) 60%, rgba(13, 17, 23, 1.0) 100%),
         url('/assets/Default_background_image.jpg') center top / cover no-repeat;
     z-index: 1;
 }
@@ -34,32 +34,82 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    padding: 2.5rem 1.5rem;
+    padding: calc(40px + 1.5rem) 1.5rem 2.5rem 1.5rem;
+    /* Add top padding to avoid overlap with fixed top bar */
     box-sizing: border-box;
 }
 
-/* 1. Header (Status) */
-.home-header {
+/* 1. Top Bar */
+.home-top-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 42px;
+    background: rgba(13, 17, 23, 0.85);
+    /* Same as bottom-nav */
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-left: 0.5rem;
-    margin-bottom: 2rem;
+    justify-content: center;
+    /* Center items mainly for the logo */
+    align-items: center;
+    padding: 0 1.5rem;
+    /* Add padding for the left element */
+    box-sizing: border-box;
+    z-index: 100;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    /* Shadow downwards */
     animation: fadeIn 1s ease-out;
+}
+
+.home-top-bar .home-text-logo {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    /* Absolute center for the logo */
+}
+
+.home-top-bar-left {
+    margin-right: auto;
+    /* Push to the left */
+    display: flex;
+    align-items: center;
 }
 
 .status-block {
     display: flex;
     flex-direction: column;
+    align-items: flex-start;
+    margin-right: auto;
+    /* Push to the left */
 }
 
 .vehicle-name {
     margin: 0;
-    font-size: 1.6rem;
-    font-weight: 300;
+    font-size: 1.1rem;
+    font-weight: 400;
     letter-spacing: 0.08em;
     color: #E6EDF3;
     text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
+}
+
+.home-top-bar-right {
+    margin-left: auto;
+    /* Push to the right */
+    display: flex;
+    align-items: center;
+}
+
+.notification-icon {
+    font-size: 1.5rem;
+    color: #E6EDF3;
+    cursor: pointer;
+    transition: color 0.3s ease;
+}
+
+.notification-icon:hover {
+    color: #D4AF37;
 }
 
 .vehicle-odo {
@@ -215,7 +265,7 @@
 
 .route-title {
     margin: 0 0 0.3rem 0;
-    font-size: 1.2rem;
+    font-size: 1.0rem;
     font-weight: 400;
     letter-spacing: 0.05em;
     color: #E6EDF3;
@@ -284,7 +334,7 @@
 
 /* 4. Top Bar & Logo */
 .home-text-logo {
-    font-size: 2.4rem;
+    font-size: 1.6rem;
     font-weight: 700;
     letter-spacing: -0.02em;
     color: #E6EDF3;
@@ -336,5 +386,142 @@
     .route-card {
         height: 120px;
         /* Slightly shorter on mobile */
+    }
+}
+
+/* =========================================
+   Navigation Drawer
+========================================= */
+
+/* Overlay */
+.drawer-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(13, 17, 23, 0.6);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 999;
+    /* Below drawer */
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.drawer-overlay.open {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Drawer Panel */
+.nav-drawer {
+    position: fixed;
+    top: 0;
+    left: -300px;
+    /* Start off-screen on the left */
+    width: 300px;
+    height: 100vh;
+    background: rgba(22, 27, 34, 0.95);
+    /* Slightly lighter than background */
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    /* Glass edge on the right instead of left */
+    box-shadow: 10px 0 30px rgba(0, 0, 0, 0.5);
+    /* Shadow to the right */
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    transition: left 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    overflow-y: auto;
+}
+
+.nav-drawer.open {
+    left: 0;
+    /* Slide in */
+}
+
+/* Header */
+.drawer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem 1.5rem 1rem 1.5rem;
+}
+
+.drawer-header h2 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    color: #E6EDF3;
+}
+
+.drawer-close-btn {
+    background: transparent;
+    border: none;
+    color: #8B949E;
+    cursor: pointer;
+    padding: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s ease;
+}
+
+.drawer-close-btn:hover {
+    color: #E6EDF3;
+}
+
+/* Announcement List */
+.announcement-list {
+    display: flex;
+    flex-direction: column;
+    padding: 0 1.5rem 2rem 1.5rem;
+    gap: 1.2rem;
+}
+
+.announcement-item {
+    display: flex;
+    flex-direction: column;
+    padding: 1rem;
+    background: rgba(13, 17, 23, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.announcement-item:hover {
+    background: rgba(13, 17, 23, 0.8);
+    transform: translateY(-2px);
+    border-color: rgba(212, 175, 55, 0.2);
+}
+
+.announcement-date {
+    font-size: 0.7rem;
+    color: #D4AF37;
+    /* Accent color for the date */
+    font-family: 'Roboto Mono', monospace;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.5rem;
+}
+
+.announcement-text {
+    font-size: 0.85rem;
+    color: #E6EDF3;
+    line-height: 1.5;
+    margin: 0;
+    letter-spacing: 0.02em;
+}
+
+/* Mobile Adjustments for Drawer */
+@media (max-width: 480px) {
+    .nav-drawer {
+        width: 85%;
+        /* Take up more space on small screens */
+        left: -85%;
     }
 }

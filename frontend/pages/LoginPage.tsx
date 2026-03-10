@@ -48,6 +48,13 @@ function LoginPage() {
             return;
         }
 
+        // パスワードのバリデーション（8文字以上、半角英数字を含む）
+        const passwordRegex = /^(?=.*[a-zA-Z])(?=.*\d).{8,}$/;
+        if (!passwordRegex.test(password)) {
+            setErrorMsg('パスワードは8文字以上で、英字と数字をそれぞれ1文字以上含める必要があります。');
+            return;
+        }
+
         setIsLoading(true);
         try {
             const { data, error } = await supabase.auth.signInWithPassword({

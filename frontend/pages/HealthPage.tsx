@@ -1,5 +1,4 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import BottomNav from '../components/BottomNav';
 import { apiFetch } from '../src/lib/api';
 import './HealthPage.css';
@@ -8,7 +7,6 @@ const RECORDING_DURATION = 5; // 秒
 const NUM_BARS = 40;
 
 function HealthPage() {
-    const navigate = useNavigate();
     const [currentMode, setCurrentMode] = useState<'audio' | 'camera'>('audio');
 
     // ===== Engine Sound States =====
@@ -234,9 +232,7 @@ function HealthPage() {
         <div className="health-page">
             {/* Header */}
             <header className="health-header">
-                <button className="back-btn" onClick={() => navigate('/home')}>←</button>
-                <h2 className="health-title">Health Check</h2>
-                <div className="spacer"></div>
+                <h1 className="health-title">Health Check</h1>
             </header>
 
             <div className="health-content">
