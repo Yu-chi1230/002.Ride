@@ -594,6 +594,8 @@ model vehicles {
   model_name              String
   current_mileage         Int?                   @default(0)
   last_oil_change_mileage Int?
+  last_oil_change_date    DateTime?              @db.Date
+  monthly_avg_mileage     Int?
   created_at              DateTime               @default(now()) @db.Timestamptz(6)
   maker                   String                 @default("Other")
   health_logs             health_logs[]

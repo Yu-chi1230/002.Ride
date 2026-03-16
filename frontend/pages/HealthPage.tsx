@@ -27,7 +27,7 @@ function HealthPage() {
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     // ===== Visual Inspection States =====
-    const [logType, setLogType] = useState<'meter' | 'tire' | 'chain' | 'plug' | 'engine'>('meter');
+    const [logType, setLogType] = useState<'tire' | 'chain' | 'plug' | 'engine'>('tire');
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -198,7 +198,7 @@ function HealthPage() {
     };
 
     // ===== 画像解析送信 =====
-    const handleAnalyze = async () => {
+    const handleAnalyze = async (targetLogType: 'tire' | 'chain' | 'plug' | 'engine' = logType) => {
         if (!imageFile) return;
 
         setIsAnalyzing(true);
@@ -206,7 +206,7 @@ function HealthPage() {
 
         const formData = new FormData();
         formData.append('image', imageFile);
-        formData.append('log_type', logType);
+        formData.append('log_type', targetLogType);
 
         try {
             const response = await apiFetch('/api/health/analyze', {
@@ -228,6 +228,13 @@ function HealthPage() {
         }
     };
 
+    const handleModeChange = (mode: 'audio' | 'camera') => {
+        setCurrentMode(mode);
+        setImageFile(null);
+        setPreviewUrl(null);
+        setAnalysisResult(null);
+    };
+
     return (
         <div className="health-page">
             {/* Header */}
@@ -241,13 +248,13 @@ function HealthPage() {
                 <div className="mode-selector">
                     <button
                         className={`mode-btn ${currentMode === 'audio' ? 'active' : ''}`}
-                        onClick={() => setCurrentMode('audio')}
+                        onClick={() => handleModeChange('audio')}
                     >
                         エンジン診断
                     </button>
                     <button
                         className={`mode-btn ${currentMode === 'camera' ? 'active' : ''}`}
-                        onClick={() => setCurrentMode('camera')}
+                        onClick={() => handleModeChange('camera')}
                     >
                         目視点検
                     </button>
@@ -348,13 +355,12 @@ function HealthPage() {
 
                     <div className="inspection-form" style={{ width: '100%', maxWidth: '400px', margin: '0 auto' }}>
                         <div className="form-group" style={{ marginBottom: '2rem' }}>
-                            <label style={{ color: '#8B949E', fontSize: '0.85rem', display: 'block', marginBottom: '0.8rem', letterSpacing: '0.05em' }}>点検箇所の選択 (Target Component)</label>
+                            <label style={{ color: '#8B949E', fontSize: '0.85rem', display: 'block', marginBottom: '0.8rem', letterSpacing: '0.05em' }}>点検箇所の選択</label>
                             <select
                                 value={logType}
                                 onChange={(e) => setLogType(e.target.value as any)}
                                 className="minimal-select"
                             >
-                                <option value="meter">メーター</option>
                                 <option value="tire">タイヤ</option>
                                 <option value="chain">ドライブチェーン</option>
                                 <option value="plug">スパークプラグ</option>
@@ -409,10 +415,10 @@ function HealthPage() {
                         {previewUrl && (
                             <button
                                 className="analyze-btn minimal-btn-primary"
-                                onClick={handleAnalyze}
+                                onClick={() => handleAnalyze(logType)}
                                 disabled={isAnalyzing}
                             >
-                                {isAnalyzing ? '解析中...' : 'AIによる診断を開始する'}
+                                {isAnalyzing ? '解析中...' : 'アップロード'}
                             </button>
                         )}
                     </div>

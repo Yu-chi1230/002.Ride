@@ -9,6 +9,9 @@ export type VehicleData = {
     maker: string;
     model_name: string;
     current_mileage: number | null;
+    last_oil_change_mileage: number | null;
+    last_oil_change_date: string | null;
+    monthly_avg_mileage: number | null;
 };
 
 export type ProfileData = {

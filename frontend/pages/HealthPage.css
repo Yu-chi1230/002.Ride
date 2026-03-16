@@ -70,6 +70,7 @@
 .mode-selector {
     display: flex;
     justify-content: center;
+    flex-wrap: wrap;
     gap: 1.5rem;
     margin: 1rem 0 2rem;
     z-index: 10;
@@ -109,7 +110,8 @@
 }
 
 .audio-section,
-.camera-section {
+.camera-section,
+.meter-section {
     flex: 1;
     display: flex;
     flex-direction: column;

@@ -8,6 +8,13 @@ import BottomNav from '../components/BottomNav';
 import { VEHICLE_MAKERS } from '../src/constants/vehicleMakers';
 import './SettingPage.css';
 
+const formatDateForInput = (value: string | Date | null | undefined): string => {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toISOString().slice(0, 10);
+};
+
 function SettingPage() {
     const navigate = useNavigate();
     const { profileData, refreshProfile } = useAuth();
@@ -26,6 +33,12 @@ function SettingPage() {
         vehicle_model_name: ''
     });
 
+    const [oilFormData, setOilFormData] = useState({
+        last_oil_change_date: '',
+        last_oil_change_mileage: '',
+        monthly_avg_mileage: ''
+    });
+
     // Cropper states
     const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
     const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -33,7 +46,7 @@ function SettingPage() {
     const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
     const [isCropping, setIsCropping] = useState(false);
 
-    // Populate form data once profileData is loaded
+    // Populate profile form data once profileData is loaded
     useEffect(() => {
         if (profileData) {
             const vehicle = profileData.vehicles?.[0]; // Assume single vehicle for now
@@ -47,6 +60,18 @@ function SettingPage() {
         }
     }, [profileData, isEditing]); // Refill data when editing is toggled (cancel edit)
 
+    // Populate oil settings (always editable, independent from profile edit mode)
+    useEffect(() => {
+        if (profileData) {
+            const vehicle = profileData.vehicles?.[0]; // Assume single vehicle for now
+            setOilFormData({
+                last_oil_change_date: formatDateForInput(vehicle?.last_oil_change_date),
+                last_oil_change_mileage: vehicle?.last_oil_change_mileage?.toString() || '',
+                monthly_avg_mileage: vehicle?.monthly_avg_mileage?.toString() || ''
+            });
+        }
+    }, [profileData]);
+
     // Background Image
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -55,15 +80,28 @@ function SettingPage() {
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
+    const handleOilInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const { name, value } = e.target;
+        setOilFormData(prev => ({ ...prev, [name]: value }));
+    };
+
     const handleSaveProfile = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
         setMessage(null);
 
         try {
+            const requestBody = {
+                first_name: formData.first_name,
+                last_name: formData.last_name,
+                display_name: formData.display_name,
+                vehicle_maker: formData.vehicle_maker,
+                vehicle_model_name: formData.vehicle_model_name
+            };
+
             const response = await apiFetch('/api/users/me', {
                 method: 'PUT',
-                body: JSON.stringify(formData)
+                body: JSON.stringify(requestBody)
             });
 
             if (response.ok) {
@@ -76,6 +114,50 @@ function SettingPage() {
             }
         } catch (error) {
             console.error('Profile update error:', error);
+            setMessage({ text: '通信エラーが発生しました。', type: 'error' });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleSaveOilSettings = async () => {
+        setIsLoading(true);
+        setMessage(null);
+
+        try {
+            const parsedOilMileage = oilFormData.last_oil_change_mileage === '' ? null : Number(oilFormData.last_oil_change_mileage);
+            const parsedMonthlyAvgMileage = oilFormData.monthly_avg_mileage === '' ? null : Number(oilFormData.monthly_avg_mileage);
+
+            if (parsedOilMileage !== null && (!Number.isFinite(parsedOilMileage) || parsedOilMileage < 0)) {
+                setMessage({ text: '前回オイル交換時の走行距離は0以上の数値で入力してください。', type: 'error' });
+                setIsLoading(false);
+                return;
+            }
+
+            if (parsedMonthlyAvgMileage !== null && (!Number.isFinite(parsedMonthlyAvgMileage) || parsedMonthlyAvgMileage < 0)) {
+                setMessage({ text: '一ヶ月あたりの平均走行距離は0以上の数値で入力してください。', type: 'error' });
+                setIsLoading(false);
+                return;
+            }
+
+            const response = await apiFetch('/api/users/me', {
+                method: 'PUT',
+                body: JSON.stringify({
+                    last_oil_change_date: oilFormData.last_oil_change_date || null,
+                    last_oil_change_mileage: parsedOilMileage,
+                    monthly_avg_mileage: parsedMonthlyAvgMileage
+                })
+            });
+
+            if (response.ok) {
+                setMessage({ text: 'オイル管理情報を更新しました。', type: 'success' });
+                await refreshProfile();
+            } else {
+                const errorData = await response.json();
+                setMessage({ text: errorData.error || 'オイル管理情報の更新に失敗しました。', type: 'error' });
+            }
+        } catch (error) {
+            console.error('Oil settings update error:', error);
             setMessage({ text: '通信エラーが発生しました。', type: 'error' });
         } finally {
             setIsLoading(false);
@@ -196,13 +278,8 @@ function SettingPage() {
     return (
         <div className="setting-page">
             <div className="setting-content">
-                <header className="setting-header" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <header className="setting-header">
                     <h1>Settings</h1>
-                    {!isEditing && (
-                        <button className="btn-secondary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.9rem', marginTop: '0.2rem' }} onClick={() => setIsEditing(true)}>
-                            編集
-                        </button>
-                    )}
                 </header>
 
                 {message && (
@@ -292,7 +369,7 @@ function SettingPage() {
                             />
                         </div>
 
-                        {isEditing && (
+                        {isEditing ? (
                             <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
                                 <button
                                     type="button"
@@ -307,8 +384,70 @@ function SettingPage() {
                                     {isLoading ? '保存中...' : '保存する'}
                                 </button>
                             </div>
+                        ) : (
+                            <button
+                                type="button"
+                                className="btn-primary"
+                                style={{ width: '100%', marginTop: '0.5rem' }}
+                                onClick={() => setIsEditing(true)}
+                            >
+                                編集
+                            </button>
                         )}
                     </form>
+                </section>
+
+                {/* Oil Management Section */}
+                <section className="setting-section">
+                    <h2 className="setting-section-title">オイル管理</h2>
+
+                    <div className="setting-form">
+                        <div className="form-group">
+                            <label>　前回のオイル交換時年月日</label>
+                            <input
+                                type="date"
+                                name="last_oil_change_date"
+                                value={oilFormData.last_oil_change_date}
+                                onChange={handleOilInputChange}
+                            />
+                        </div>
+
+                        <div className="form-group">
+                            <label>　前回のオイル交換時の走行距離 (km)</label>
+                            <input
+                                type="number"
+                                name="last_oil_change_mileage"
+                                value={oilFormData.last_oil_change_mileage}
+                                onChange={handleOilInputChange}
+                                min="0"
+                                step="1"
+                                inputMode="numeric"
+                            />
+                        </div>
+
+                        <div className="form-group">
+                            <label>　一ヶ月あたりの平均走行距離 (km)</label>
+                            <input
+                                type="number"
+                                name="monthly_avg_mileage"
+                                value={oilFormData.monthly_avg_mileage}
+                                onChange={handleOilInputChange}
+                                min="0"
+                                step="1"
+                                inputMode="numeric"
+                            />
+                        </div>
+
+                        <button
+                            type="button"
+                            className="btn-primary"
+                            style={{ width: '100%', marginTop: '0.5rem' }}
+                            onClick={handleSaveOilSettings}
+                            disabled={isLoading}
+                        >
+                            {isLoading ? '保存中...' : 'オイル管理を保存'}
+                        </button>
+                    </div>
                 </section>
 
                 {/* Preferences Section */}

@@ -115,7 +115,53 @@ app.put('/api/users/me', requireAuth, async (req: AuthRequest, res: Response) =>
         }
 
         const userId = req.user.id;
-        const { first_name, last_name, display_name, vehicle_maker, vehicle_model_name } = req.body;
+        const {
+            first_name,
+            last_name,
+            display_name,
+            vehicle_maker,
+            vehicle_model_name,
+            last_oil_change_mileage,
+            last_oil_change_date,
+            monthly_avg_mileage
+        } = req.body;
+
+        let parsedLastOilChangeMileage: number | null | undefined = undefined;
+        if (last_oil_change_mileage !== undefined) {
+            if (last_oil_change_mileage === null || last_oil_change_mileage === '') {
+                parsedLastOilChangeMileage = null;
+            } else {
+                const parsed = Number(last_oil_change_mileage);
+                if (!Number.isFinite(parsed) || parsed < 0) {
+                    return res.status(400).json({ error: 'Invalid last_oil_change_mileage' });
+                }
+                parsedLastOilChangeMileage = Math.trunc(parsed);
+            }
+        }
+
+        let parsedLastOilChangeDate: Date | null | undefined = undefined;
+        if (last_oil_change_date !== undefined) {
+            if (last_oil_change_date === null || last_oil_change_date === '') {
+                parsedLastOilChangeDate = null;
+            } else if (typeof last_oil_change_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(last_oil_change_date)) {
+                parsedLastOilChangeDate = new Date(`${last_oil_change_date}T00:00:00.000Z`);
+            } else {
+                return res.status(400).json({ error: 'Invalid last_oil_change_date. Use YYYY-MM-DD.' });
+            }
+        }
+
+        let parsedMonthlyAvgMileage: number | null | undefined = undefined;
+        if (monthly_avg_mileage !== undefined) {
+            if (monthly_avg_mileage === null || monthly_avg_mileage === '') {
+                parsedMonthlyAvgMileage = null;
+            } else {
+                const parsed = Number(monthly_avg_mileage);
+                if (!Number.isFinite(parsed) || parsed < 0) {
+                    return res.status(400).json({ error: 'Invalid monthly_avg_mileage' });
+                }
+                parsedMonthlyAvgMileage = Math.trunc(parsed);
+            }
+        }
 
         const updatedProfile = await prisma.$transaction(async (tx) => {
             // Update the profile
@@ -134,12 +180,21 @@ app.put('/api/users/me', requireAuth, async (req: AuthRequest, res: Response) =>
                 where: { user_id: userId }
             });
 
-            if (vehicle && (vehicle_maker !== undefined || vehicle_model_name !== undefined)) {
+            if (vehicle && (
+                vehicle_maker !== undefined ||
+                vehicle_model_name !== undefined ||
+                parsedLastOilChangeMileage !== undefined ||
+                parsedLastOilChangeDate !== undefined ||
+                parsedMonthlyAvgMileage !== undefined
+            )) {
                 vehicle = await tx.vehicles.update({
                     where: { id: vehicle.id },
                     data: {
                         maker: vehicle_maker ?? undefined,
                         model_name: vehicle_model_name ?? undefined,
+                        last_oil_change_mileage: parsedLastOilChangeMileage,
+                        last_oil_change_date: parsedLastOilChangeDate,
+                        monthly_avg_mileage: parsedMonthlyAvgMileage,
                     }
                 });
             }
@@ -256,6 +311,11 @@ app.post('/api/health/analyze', requireAuth, upload.single('image'), async (req:
             return res.status(400).json({ error: 'Image file and log_type are required' });
         }
 
+        const allowedVisualTypes: HealthLogType[] = ['tire', 'chain', 'plug', 'engine'];
+        if (!allowedVisualTypes.includes(logType)) {
+            return res.status(400).json({ error: 'Unsupported log_type' });
+        }
+
         // Get the user's primary vehicle (assuming 1 vehicle per user for now)
         const vehicle = await prisma.vehicles.findFirst({
             where: { user_id: userId }
@@ -265,23 +325,8 @@ app.post('/api/health/analyze', requireAuth, upload.single('image'), async (req:
             return res.status(404).json({ error: 'Vehicle not found' });
         }
 
-        // Trigger the mock AI Analysis
-        let analysisResult;
-        if (logType === 'meter') {
-            analysisResult = await aiAnalyzer.analyzeMeter(file.buffer);
-
-            // If it's a meter and we got a mileage reading, update the vehicle ODO
-            if (analysisResult.mileage !== undefined) {
-                await prisma.vehicles.update({
-                    where: { id: vehicle.id },
-                    data: { current_mileage: analysisResult.mileage }
-                });
-                console.log(`[Health API] Updated ODO for ${vehicle.id} to ${analysisResult.mileage}km`);
-            }
-        } else {
-            // Tire, Chain, Plug, Engine visual checks
-            analysisResult = await aiAnalyzer.analyzeComponent(file.buffer, logType);
-        }
+        // Tire, Chain, Plug, Engine visual checks
+        const analysisResult = await aiAnalyzer.analyzeComponent(file.buffer, logType, file.mimetype);
 
         // Save the result to health_logs
         const healthLog = await prisma.health_logs.create({
