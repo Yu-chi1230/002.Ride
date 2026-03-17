@@ -165,7 +165,7 @@ function CreatePage() {
                     <div className="badge-before" style={{ position: 'relative', bottom: 0, left: 0, opacity: sliderValue > 20 ? 1 : 0 }}>BEFORE</div>
                 )}
 
-                <h1 className="create-title">CINEMATIC EDITOR</h1>
+                <h1 className="create-title">Create Editor</h1>
 
                 {selectedThemeId !== 'original' && previewUrls.length > 0 && (
                     <div className="badge-after" style={{ position: 'relative', bottom: 0, right: 0, opacity: sliderValue < 80 ? 1 : 0 }}>AFTER</div>

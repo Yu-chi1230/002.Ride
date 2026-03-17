@@ -41,6 +41,8 @@ app.use(express.json());
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_ANON_KEY || ''; // Use anon key for signups
 const supabase = createClient(supabaseUrl, supabaseKey);
+const notionToken = process.env.NOTION_TOKEN || '';
+const notionContactDatabaseId = process.env.NOTION_CONTACT_DATABASE_ID || '71a9b60a-c40d-4b56-ac87-d39cff04e841';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
@@ -80,6 +82,205 @@ const requireAuth = async (req: AuthRequest, res: Response, next: NextFunction) 
     req.user = user;
     next();
 };
+
+const attachOptionalUser = async (req: AuthRequest, _res: Response, next: NextFunction) => {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return next();
+    }
+
+    const token = authHeader.split(' ')[1];
+    const { data: { user } } = await supabase.auth.getUser(token);
+
+    if (user) {
+        req.user = user;
+    }
+
+    next();
+};
+
+type ContactCategory = 'bug' | 'question' | 'feature' | 'other';
+
+const notionCategoryLabelMap: Record<ContactCategory, string> = {
+    bug: '不具合報告',
+    question: '使い方の質問',
+    feature: '改善要望',
+    other: 'その他',
+};
+
+const isValidContactCategory = (value: unknown): value is ContactCategory => (
+    value === 'bug' || value === 'question' || value === 'feature' || value === 'other'
+);
+
+const buildContactSummary = (message: string) => {
+    const normalized = message.replace(/\s+/g, ' ').trim();
+    if (normalized.length <= 160) {
+        return normalized;
+    }
+
+    return `${normalized.slice(0, 157)}...`;
+};
+
+app.post('/api/contact', attachOptionalUser, async (req: AuthRequest, res: Response) => {
+    const { name, email, category, subject, message, metadata } = req.body ?? {};
+
+    if (typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+        return res.status(400).json({ error: 'Invalid email' });
+    }
+
+    if (!isValidContactCategory(category)) {
+        return res.status(400).json({ error: 'Invalid category' });
+    }
+
+    if (typeof subject !== 'string' || !subject.trim() || subject.trim().length > 60) {
+        return res.status(400).json({ error: 'Invalid subject' });
+    }
+
+    if (typeof message !== 'string' || !message.trim() || message.trim().length > 2000) {
+        return res.status(400).json({ error: 'Invalid message' });
+    }
+
+    const safeMetadata = metadata && typeof metadata === 'object' ? metadata as Record<string, unknown> : {};
+    const route = typeof safeMetadata.route === 'string' ? safeMetadata.route : '';
+    const userId = req.user?.id || (typeof safeMetadata.userId === 'string' ? safeMetadata.userId : '');
+    const trimmedName = typeof name === 'string' && name.trim() ? name.trim() : null;
+    const trimmedEmail = email.trim();
+    const trimmedSubject = subject.trim();
+    const trimmedMessage = message.trim();
+    const contactSummary = buildContactSummary(trimmedMessage);
+    const metadataJson = JSON.stringify({
+        ...safeMetadata,
+        userId,
+    });
+
+    try {
+        const insertResult = await pool.query<{
+            id: string;
+        }>(
+            `insert into public.contact_messages (
+                email,
+                name,
+                category,
+                subject,
+                message,
+                metadata,
+                status,
+                notion_sync_status
+            ) values ($1, $2, $3, $4, $5, $6::jsonb, 'new', 'pending')
+            returning id`,
+            [
+                trimmedEmail,
+                trimmedName,
+                category,
+                trimmedSubject,
+                trimmedMessage,
+                metadataJson,
+            ]
+        );
+
+        const contactId = insertResult.rows[0]?.id;
+
+        if (!contactId) {
+            throw new Error('Failed to create contact record');
+        }
+
+        if (!notionToken) {
+            await pool.query(
+                `update public.contact_messages
+                 set notion_sync_status = 'failed',
+                     notion_sync_error = $2
+                 where id = $1`,
+                [contactId, 'NOTION_TOKEN is not configured']
+            );
+
+            return res.status(201).json({
+                message: 'Contact created successfully',
+                contactId,
+                notionSyncStatus: 'failed',
+            });
+        }
+
+        const notionResponse = await fetch('https://api.notion.com/v1/pages', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${notionToken}`,
+                'Content-Type': 'application/json',
+                'Notion-Version': '2022-06-28',
+            },
+            body: JSON.stringify({
+                parent: {
+                    database_id: notionContactDatabaseId,
+                },
+                properties: {
+                    '件名': {
+                        title: [
+                            {
+                                text: {
+                                    content: subject.trim(),
+                                },
+                            },
+                        ],
+                    },
+                    '種別': {
+                        select: {
+                            name: notionCategoryLabelMap[category],
+                        },
+                    },
+                    '問い合わせID': {
+                        rich_text: [{ text: { content: contactId } }],
+                    },
+                    '要約': {
+                        rich_text: [{ text: { content: contactSummary } }],
+                    },
+                    'ステータス': {
+                        status: {
+                            name: '未着手',
+                        },
+                    },
+                },
+            }),
+        });
+
+        if (!notionResponse.ok) {
+            const errorText = await notionResponse.text();
+            console.error('Notion contact create error:', errorText);
+            await pool.query(
+                `update public.contact_messages
+                 set notion_sync_status = 'failed',
+                     notion_sync_error = $2
+                 where id = $1`,
+                [contactId, errorText.slice(0, 1000)]
+            );
+
+            return res.status(201).json({
+                message: 'Contact created successfully',
+                contactId,
+                notionSyncStatus: 'failed',
+            });
+        }
+
+        const notionPage = await notionResponse.json() as { id?: string };
+
+        await pool.query(
+            `update public.contact_messages
+             set notion_sync_status = 'synced',
+                 notion_page_id = $2,
+                 notion_sync_error = null
+             where id = $1`,
+            [contactId, notionPage.id ?? null]
+        );
+
+        return res.status(201).json({
+            message: 'Contact created successfully',
+            contactId,
+            notionSyncStatus: 'synced',
+        });
+    } catch (error) {
+        console.error('Contact API Error:', error);
+        return res.status(500).json({ error: 'Internal Server Error during contact creation' });
+    }
+});
 
 // Get Current User Profile
 app.get('/api/users/me', requireAuth, async (req: AuthRequest, res: Response) => {

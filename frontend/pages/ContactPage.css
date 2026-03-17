@@ -1,0 +1,205 @@
+.contact-page {
+    min-height: 100vh;
+    background:
+        radial-gradient(circle at top, rgba(212, 175, 55, 0.12), transparent 32%),
+        linear-gradient(180deg, #0d1117 0%, #05070a 100%);
+    color: #ffffff;
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 80px;
+    color-scheme: dark;
+}
+
+.contact-content {
+    flex: 1;
+    padding: 1.5rem;
+    overflow-y: auto;
+}
+
+.contact-header {
+    margin-bottom: 1.5rem;
+}
+
+.contact-header h1 {
+    margin: 0 0 0.5rem;
+    font-size: 1.9rem;
+    color: #f0f6fc;
+}
+
+.contact-header p {
+    margin: 0;
+    color: #8b949e;
+    line-height: 1.5;
+}
+
+.contact-back-button {
+    border: none;
+    background: transparent;
+    color: #d4af37;
+    padding: 0;
+    margin-bottom: 1rem;
+    font-size: 0.95rem;
+    cursor: pointer;
+}
+
+.contact-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.contact-form .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.contact-form .form-group label {
+    font-size: 0.95rem;
+    color: #c9d1d9;
+    font-weight: 600;
+}
+
+.contact-form .form-group input,
+.contact-form .form-group select,
+.contact-form .form-group textarea {
+    background: #000000;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 0.85rem 1rem;
+    color: #c9d1d9;
+    font-size: 1rem;
+    transition: border-color 0.2s;
+    appearance: none;
+    -webkit-appearance: none;
+}
+
+.contact-form .form-group input,
+.contact-form .form-group select {
+    background-color: #000000 !important;
+    box-shadow: inset 0 0 0 1000px #000000;
+    -webkit-text-fill-color: #c9d1d9;
+}
+
+.contact-form .form-group textarea,
+.contact-form .form-group .contact-textarea {
+    background: #000000 !important;
+    background-color: #000000 !important;
+    box-shadow: inset 0 0 0 1000px #000000;
+    color: #c9d1d9;
+    -webkit-text-fill-color: #c9d1d9;
+    caret-color: #c9d1d9;
+    color-scheme: dark;
+    resize: vertical;
+    min-height: 180px;
+}
+
+.contact-form .form-group input:focus,
+.contact-form .form-group select:focus,
+.contact-form .form-group textarea:focus {
+    outline: none;
+    border-color: #58a6ff;
+}
+
+.contact-form .form-group input:disabled,
+.contact-form .form-group select:disabled,
+.contact-form .form-group textarea:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.contact-section,
+.contact-metadata {
+    background: rgba(22, 27, 34, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 1.25rem;
+}
+
+.contact-counter {
+    color: #8b949e;
+    font-size: 0.85rem;
+    text-align: right;
+}
+
+.contact-error-text {
+    margin: 0;
+    color: #ff7b72;
+    font-size: 0.9rem;
+}
+
+.contact-metadata h2 {
+    margin: 0 0 0.5rem;
+    font-size: 1rem;
+    color: #f0f6fc;
+}
+
+.contact-metadata p {
+    margin: 0;
+    color: #8b949e;
+    line-height: 1.5;
+}
+
+.contact-actions {
+    display: flex;
+}
+
+.contact-actions .btn-primary {
+    width: 100%;
+}
+
+.contact-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(3, 7, 12, 0.74);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    z-index: 1200;
+    backdrop-filter: blur(10px);
+}
+
+.contact-modal {
+    width: min(100%, 380px);
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: linear-gradient(180deg, rgba(17, 24, 32, 0.98), rgba(8, 11, 15, 0.98));
+    padding: 1.5rem;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+}
+
+.contact-modal-success {
+    border-color: rgba(63, 185, 80, 0.35);
+}
+
+.contact-modal-error {
+    border-color: rgba(255, 123, 114, 0.35);
+}
+
+.contact-modal-title {
+    margin: 0 0 0.75rem;
+    font-size: 1.25rem;
+    color: #f0f6fc;
+}
+
+.contact-modal-message {
+    margin: 0 0 1.25rem;
+    color: #c9d1d9;
+    line-height: 1.6;
+}
+
+.contact-modal-button {
+    width: 100%;
+}
+
+@media (max-width: 640px) {
+    .contact-content {
+        padding: 1rem;
+    }
+
+    .contact-section,
+    .contact-metadata {
+        padding: 1rem;
+    }
+}

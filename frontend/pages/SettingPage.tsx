@@ -503,6 +503,20 @@ function SettingPage() {
                     />
                 </section>
 
+                <section className="setting-section">
+                    <h2 className="setting-section-title">お問い合わせ</h2>
+                    <p className="setting-help-text">
+                        質問、不具合報告、改善要望を送信できます。
+                    </p>
+                    <button
+                        className="btn-secondary"
+                        style={{ width: '100%' }}
+                        onClick={() => navigate('/settings/contact')}
+                    >
+                        問い合わせフォームを開く
+                    </button>
+                </section>
+
                 {/* Account Section */}
                 <section className="setting-section" style={{ border: '1px solid rgba(218, 54, 51, 0.3)' }}>
                     <h2 className="setting-section-title" style={{ color: '#ff7b72', borderBottomColor: 'rgba(218, 54, 51, 0.2)' }}>アカウント</h2>

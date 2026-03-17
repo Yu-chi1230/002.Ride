@@ -57,10 +57,7 @@
     font-size: 1.2rem;
     font-weight: 700;
     letter-spacing: 0.1em;
-    /* 広く */
-    text-transform: uppercase;
     color: #E6EDF3;
-    font-family: 'Inter', 'Roboto Mono', monospace;
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
