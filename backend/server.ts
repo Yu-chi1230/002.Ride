@@ -43,6 +43,7 @@ const supabaseKey = process.env.SUPABASE_ANON_KEY || ''; // Use anon key for sig
 const supabase = createClient(supabaseUrl, supabaseKey);
 const notionToken = process.env.NOTION_TOKEN || '';
 const notionContactDatabaseId = process.env.NOTION_CONTACT_DATABASE_ID || '71a9b60a-c40d-4b56-ac87-d39cff04e841';
+const notionAnnouncementDatabaseId = process.env.NOTION_ANNOUNCEMENT_DATABASE_ID || 'cebb4ec8-856f-4011-bc7e-1667100bde2a';
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
@@ -120,6 +121,179 @@ const buildContactSummary = (message: string) => {
     }
 
     return `${normalized.slice(0, 157)}...`;
+};
+
+const isIsoDateOnly = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
+
+const normalizeNotionDate = (value: unknown, options?: { endOfDay?: boolean }): string | null => {
+    if (typeof value !== 'string' || !value.trim()) {
+        return null;
+    }
+
+    if (isIsoDateOnly(value)) {
+        const suffix = options?.endOfDay ? 'T23:59:59.999Z' : 'T00:00:00.000Z';
+        return `${value}${suffix}`;
+    }
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+        return null;
+    }
+
+    return parsed.toISOString();
+};
+
+const toPlainText = (value: unknown): string => {
+    if (!Array.isArray(value)) {
+        return '';
+    }
+
+    return value
+        .map((item) => (item && typeof item === 'object' && typeof (item as { plain_text?: unknown }).plain_text === 'string'
+            ? (item as { plain_text: string }).plain_text
+            : ''))
+        .join('')
+        .trim();
+};
+
+const getNotionTitleText = (properties: Record<string, unknown>, key: string): string => {
+    const prop = properties[key];
+    if (!prop || typeof prop !== 'object') {
+        return '';
+    }
+
+    return toPlainText((prop as { title?: unknown }).title);
+};
+
+const getNotionRichText = (properties: Record<string, unknown>, key: string): string => {
+    const prop = properties[key];
+    if (!prop || typeof prop !== 'object') {
+        return '';
+    }
+
+    return toPlainText((prop as { rich_text?: unknown }).rich_text);
+};
+
+const getNotionSelectName = (properties: Record<string, unknown>, key: string): string => {
+    const prop = properties[key];
+    if (!prop || typeof prop !== 'object') {
+        return '';
+    }
+
+    const selectName = (prop as { select?: { name?: unknown } }).select?.name;
+    if (typeof selectName === 'string') {
+        return selectName;
+    }
+
+    const statusName = (prop as { status?: { name?: unknown } }).status?.name;
+    return typeof statusName === 'string' ? statusName : '';
+};
+
+const getNotionDateStart = (properties: Record<string, unknown>, key: string): string | null => {
+    const prop = properties[key];
+    if (!prop || typeof prop !== 'object') {
+        return null;
+    }
+
+    const start = (prop as { date?: { start?: unknown } }).date?.start;
+    return typeof start === 'string' ? start : null;
+};
+
+const isSuperAdmin = async (userId: string): Promise<boolean> => {
+    const result = await pool.query<{ is_super_admin: boolean | null }>(
+        'select is_super_admin from auth.users where id = $1',
+        [userId]
+    );
+
+    return result.rows[0]?.is_super_admin === true;
+};
+
+type NotionAnnouncement = {
+    notionPageId: string;
+    title: string;
+    content: string;
+    startDateIso: string;
+    endDateIso: string | null;
+    createdAtIso: string;
+};
+
+const fetchPublishedNotionAnnouncements = async (): Promise<NotionAnnouncement[]> => {
+    const announcements: NotionAnnouncement[] = [];
+    let nextCursor: string | null = null;
+
+    while (true) {
+        const response = await fetch(`https://api.notion.com/v1/databases/${notionAnnouncementDatabaseId}/query`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${notionToken}`,
+                'Content-Type': 'application/json',
+                'Notion-Version': '2022-06-28',
+            },
+            body: JSON.stringify({
+                filter: {
+                    property: '公開状態',
+                    select: {
+                        equals: '公開',
+                    },
+                },
+                ...(nextCursor ? { start_cursor: nextCursor } : {}),
+            }),
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Notion announcement query failed: ${errorText.slice(0, 500)}`);
+        }
+
+        const payload = await response.json() as {
+            results?: Array<{
+                id?: string;
+                created_time?: string;
+                properties?: Record<string, unknown>;
+            }>;
+            has_more?: boolean;
+            next_cursor?: string | null;
+        };
+        const results = Array.isArray(payload.results) ? payload.results : [];
+
+        for (const page of results) {
+            if (!page?.id || !page.properties) {
+                continue;
+            }
+
+            const status = getNotionSelectName(page.properties, '公開状態');
+            if (status !== '公開') {
+                continue;
+            }
+
+            const title = getNotionTitleText(page.properties, 'タイトル');
+            const content = getNotionRichText(page.properties, '本文');
+            const createdAtIso = normalizeNotionDate(page.created_time) ?? new Date().toISOString();
+            const startDateIso = normalizeNotionDate(getNotionDateStart(page.properties, '公開開始')) ?? createdAtIso;
+            const endDateIso = normalizeNotionDate(getNotionDateStart(page.properties, '公開終了'), { endOfDay: true });
+
+            if (!title || !content) {
+                continue;
+            }
+
+            announcements.push({
+                notionPageId: page.id,
+                title,
+                content,
+                startDateIso,
+                endDateIso,
+                createdAtIso,
+            });
+        }
+
+        if (!payload.has_more || !payload.next_cursor) {
+            break;
+        }
+
+        nextCursor = payload.next_cursor;
+    }
+
+    return announcements;
 };
 
 app.post('/api/contact', attachOptionalUser, async (req: AuthRequest, res: Response) => {
@@ -279,6 +453,77 @@ app.post('/api/contact', attachOptionalUser, async (req: AuthRequest, res: Respo
     } catch (error) {
         console.error('Contact API Error:', error);
         return res.status(500).json({ error: 'Internal Server Error during contact creation' });
+    }
+});
+
+app.post('/api/admin/announcements/sync', requireAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        if (!req.user?.id) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        if (!await isSuperAdmin(req.user.id)) {
+            return res.status(403).json({ error: 'Forbidden: Super admin only' });
+        }
+
+        if (!notionToken) {
+            return res.status(500).json({ error: 'NOTION_TOKEN is not configured' });
+        }
+
+        if (!notionAnnouncementDatabaseId) {
+            return res.status(500).json({ error: 'NOTION_ANNOUNCEMENT_DATABASE_ID is not configured' });
+        }
+
+        const announcements = await fetchPublishedNotionAnnouncements();
+        let syncedCount = 0;
+
+        for (const item of announcements) {
+            await pool.query(
+                `insert into public.announcements (
+                    notion_page_id,
+                    is_global,
+                    target_user_id,
+                    title,
+                    content,
+                    start_date,
+                    end_date,
+                    created_at
+                ) values (
+                    $1,
+                    true,
+                    null,
+                    $2,
+                    $3,
+                    $4::timestamptz,
+                    $5::timestamptz,
+                    $6::timestamptz
+                )
+                on conflict (notion_page_id) where notion_page_id is not null do update
+                set is_global = true,
+                    target_user_id = null,
+                    title = excluded.title,
+                    content = excluded.content,
+                    start_date = excluded.start_date,
+                    end_date = excluded.end_date`,
+                [
+                    item.notionPageId,
+                    item.title,
+                    item.content,
+                    item.startDateIso,
+                    item.endDateIso,
+                    item.createdAtIso,
+                ]
+            );
+            syncedCount += 1;
+        }
+
+        return res.status(200).json({
+            message: 'Announcements synced successfully',
+            syncedCount,
+        });
+    } catch (error) {
+        console.error('Announcement sync error:', error);
+        return res.status(500).json({ error: 'Internal Server Error during announcement sync' });
     }
 });
 
