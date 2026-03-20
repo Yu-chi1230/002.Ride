@@ -5,6 +5,8 @@ import { createClient } from '@supabase/supabase-js';
 import { PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { randomUUID } from 'crypto';
+import { extname } from 'path';
 
 const app = express();
 const PORT = 8001;
@@ -41,6 +43,16 @@ app.use(express.json());
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_ANON_KEY || ''; // Use anon key for signups
 const supabase = createClient(supabaseUrl, supabaseKey);
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const healthMediaBucket = process.env.SUPABASE_HEALTH_MEDIA_BUCKET || 'health-media';
+const supabaseAdmin = supabaseServiceRoleKey
+    ? createClient(supabaseUrl, supabaseServiceRoleKey, {
+        auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+        }
+    })
+    : null;
 const notionToken = process.env.NOTION_TOKEN || '';
 const notionContactDatabaseId = process.env.NOTION_CONTACT_DATABASE_ID || '71a9b60a-c40d-4b56-ac87-d39cff04e841';
 const notionAnnouncementDatabaseId = process.env.NOTION_ANNOUNCEMENT_DATABASE_ID || 'cebb4ec8-856f-4011-bc7e-1667100bde2a';
@@ -62,6 +74,90 @@ interface AuthRequest extends Request {
     user?: any; // Supabase user type
     file?: Express.Multer.File;
 }
+
+const OIL_MAINTENANCE_ITEM_NAMES = ['oil', 'engine_oil'];
+
+const inferFileExtension = (file: Express.Multer.File) => {
+    const originalExt = extname(file.originalname || '').toLowerCase();
+    if (originalExt) {
+        return originalExt;
+    }
+
+    const mimeToExt: Record<string, string> = {
+        'image/jpeg': '.jpg',
+        'image/png': '.png',
+        'image/webp': '.webp',
+        'audio/webm': '.webm',
+        'audio/mpeg': '.mp3',
+        'audio/wav': '.wav',
+        'audio/x-wav': '.wav',
+        'audio/mp4': '.m4a',
+    };
+
+    return mimeToExt[file.mimetype] || '';
+};
+
+const uploadHealthMediaOrThrow = async (
+    file: Express.Multer.File,
+    userId: string,
+    vehicleId: string,
+    mediaType: 'image' | 'audio'
+) => {
+    if (!supabaseAdmin) {
+        throw new Error('SUPABASE_SERVICE_ROLE_KEY is not configured');
+    }
+
+    const extension = inferFileExtension(file);
+    const objectPath = `health/${userId}/${vehicleId}/${mediaType}/${Date.now()}-${randomUUID()}${extension}`;
+
+    const { error } = await supabaseAdmin.storage
+        .from(healthMediaBucket)
+        .upload(objectPath, file.buffer, {
+            contentType: file.mimetype,
+            upsert: false,
+        });
+
+    if (error) {
+        throw new Error(`Health media upload failed: ${error.message}`);
+    }
+
+    return objectPath;
+};
+
+const buildVehicleWithMaintenanceStatus = async (db: any, vehicle: any) => {
+    const oilSetting = await db.maintenance_settings.findFirst({
+        where: {
+            vehicle_id: vehicle.id,
+            item_name: { in: OIL_MAINTENANCE_ITEM_NAMES }
+        }
+    });
+
+    const currentMileage = vehicle.current_mileage;
+    const lastOilChangeMileage = vehicle.last_oil_change_mileage;
+    const distanceSinceLastChange =
+        currentMileage !== null &&
+            currentMileage !== undefined &&
+            lastOilChangeMileage !== null &&
+            lastOilChangeMileage !== undefined
+            ? Math.max(0, currentMileage - lastOilChangeMileage)
+            : null;
+
+    const remainingKm =
+        oilSetting && distanceSinceLastChange !== null
+            ? oilSetting.interval_km - distanceSinceLastChange
+            : null;
+
+    return {
+        ...vehicle,
+        oil_maintenance_status: oilSetting ? {
+            item_name: oilSetting.item_name,
+            interval_km: oilSetting.interval_km,
+            distance_since_last_change: distanceSinceLastChange,
+            remaining_km: remainingKm,
+            is_overdue: remainingKm !== null ? remainingKm <= 0 : false
+        } : null
+    };
+};
 
 // Supabase JWT Verification Middleware
 const requireAuth = async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -296,6 +392,81 @@ const fetchPublishedNotionAnnouncements = async (): Promise<NotionAnnouncement[]
     return announcements;
 };
 
+const syncAnnouncementsFromNotion = async (): Promise<{ syncedCount: number; disabledCount: number }> => {
+    if (!notionToken) {
+        throw new Error('NOTION_TOKEN is not configured');
+    }
+
+    if (!notionAnnouncementDatabaseId) {
+        throw new Error('NOTION_ANNOUNCEMENT_DATABASE_ID is not configured');
+    }
+
+    const announcements = await fetchPublishedNotionAnnouncements();
+    const notionPageIds = announcements.map((item) => item.notionPageId);
+    let syncedCount = 0;
+
+    for (const item of announcements) {
+        await pool.query(
+            `insert into public.announcements (
+                notion_page_id,
+                is_global,
+                target_user_id,
+                title,
+                content,
+                start_date,
+                end_date,
+                created_at
+            ) values (
+                $1,
+                true,
+                null,
+                $2,
+                $3,
+                $4::timestamptz,
+                $5::timestamptz,
+                $6::timestamptz
+            )
+            on conflict (notion_page_id) where notion_page_id is not null do update
+            set is_global = true,
+                target_user_id = null,
+                title = excluded.title,
+                content = excluded.content,
+                start_date = excluded.start_date,
+                end_date = excluded.end_date`,
+            [
+                item.notionPageId,
+                item.title,
+                item.content,
+                item.startDateIso,
+                item.endDateIso,
+                item.createdAtIso,
+            ]
+        );
+        syncedCount += 1;
+    }
+
+    const disabledResult = notionPageIds.length > 0
+        ? await pool.query(
+            `update public.announcements
+             set end_date = now()
+             where notion_page_id is not null
+               and notion_page_id <> all($1::text[])
+               and (end_date is null or end_date > now())`,
+            [notionPageIds]
+        )
+        : await pool.query(
+            `update public.announcements
+             set end_date = now()
+             where notion_page_id is not null
+               and (end_date is null or end_date > now())`
+        );
+
+    return {
+        syncedCount,
+        disabledCount: disabledResult.rowCount ?? 0,
+    };
+};
+
 app.post('/api/contact', attachOptionalUser, async (req: AuthRequest, res: Response) => {
     const { name, email, category, subject, message, metadata } = req.body ?? {};
 
@@ -466,63 +637,19 @@ app.post('/api/admin/announcements/sync', requireAuth, async (req: AuthRequest, 
             return res.status(403).json({ error: 'Forbidden: Super admin only' });
         }
 
-        if (!notionToken) {
-            return res.status(500).json({ error: 'NOTION_TOKEN is not configured' });
-        }
-
-        if (!notionAnnouncementDatabaseId) {
-            return res.status(500).json({ error: 'NOTION_ANNOUNCEMENT_DATABASE_ID is not configured' });
-        }
-
-        const announcements = await fetchPublishedNotionAnnouncements();
-        let syncedCount = 0;
-
-        for (const item of announcements) {
-            await pool.query(
-                `insert into public.announcements (
-                    notion_page_id,
-                    is_global,
-                    target_user_id,
-                    title,
-                    content,
-                    start_date,
-                    end_date,
-                    created_at
-                ) values (
-                    $1,
-                    true,
-                    null,
-                    $2,
-                    $3,
-                    $4::timestamptz,
-                    $5::timestamptz,
-                    $6::timestamptz
-                )
-                on conflict (notion_page_id) where notion_page_id is not null do update
-                set is_global = true,
-                    target_user_id = null,
-                    title = excluded.title,
-                    content = excluded.content,
-                    start_date = excluded.start_date,
-                    end_date = excluded.end_date`,
-                [
-                    item.notionPageId,
-                    item.title,
-                    item.content,
-                    item.startDateIso,
-                    item.endDateIso,
-                    item.createdAtIso,
-                ]
-            );
-            syncedCount += 1;
-        }
+        const result = await syncAnnouncementsFromNotion();
 
         return res.status(200).json({
             message: 'Announcements synced successfully',
-            syncedCount,
+            syncedCount: result.syncedCount,
+            disabledCount: result.disabledCount,
         });
     } catch (error) {
         console.error('Announcement sync error:', error);
+        if (error instanceof Error && error.message.includes('is not configured')) {
+            return res.status(500).json({ error: error.message });
+        }
+
         return res.status(500).json({ error: 'Internal Server Error during announcement sync' });
     }
 });
@@ -546,7 +673,17 @@ app.get('/api/users/me', requireAuth, async (req: AuthRequest, res: Response) =>
             return res.status(404).json({ error: 'Profile not found', hasProfile: false });
         }
 
-        res.json({ data: profile, hasProfile: true });
+        const vehiclesWithMaintenanceStatus = await Promise.all(
+            profile.vehicles.map((vehicle) => buildVehicleWithMaintenanceStatus(prisma, vehicle))
+        );
+
+        res.json({
+            data: {
+                ...profile,
+                vehicles: vehiclesWithMaintenanceStatus
+            },
+            hasProfile: true
+        });
     } catch (error) {
         console.error('Error fetching user profile:', error);
         res.status(500).json({ error: 'Internal Server Error' });
@@ -569,7 +706,8 @@ app.put('/api/users/me', requireAuth, async (req: AuthRequest, res: Response) =>
             vehicle_model_name,
             last_oil_change_mileage,
             last_oil_change_date,
-            monthly_avg_mileage
+            monthly_avg_mileage,
+            oil_change_interval_km
         } = req.body;
 
         let parsedLastOilChangeMileage: number | null | undefined = undefined;
@@ -609,6 +747,40 @@ app.put('/api/users/me', requireAuth, async (req: AuthRequest, res: Response) =>
             }
         }
 
+        let parsedOilChangeIntervalKm: number | null | undefined = undefined;
+        if (oil_change_interval_km !== undefined) {
+            if (oil_change_interval_km === null || oil_change_interval_km === '') {
+                parsedOilChangeIntervalKm = null;
+            } else {
+                const parsed = Number(oil_change_interval_km);
+                if (!Number.isFinite(parsed) || parsed < 0) {
+                    return res.status(400).json({ error: 'Invalid oil_change_interval_km' });
+                }
+                parsedOilChangeIntervalKm = Math.trunc(parsed);
+            }
+        }
+
+        const currentVehicle = await prisma.vehicles.findFirst({
+            where: { user_id: userId }
+        });
+
+        const currentMileageForValidation = currentVehicle?.current_mileage ?? null;
+        const nextLastOilChangeMileage =
+            parsedLastOilChangeMileage !== undefined
+                ? parsedLastOilChangeMileage
+                : currentVehicle?.last_oil_change_mileage;
+
+        if (
+            currentMileageForValidation !== null &&
+            nextLastOilChangeMileage !== null &&
+            nextLastOilChangeMileage !== undefined &&
+            currentMileageForValidation < nextLastOilChangeMileage
+        ) {
+            return res.status(400).json({
+                error: '前回オイル交換時の走行距離は現在の走行距離以下で入力してください。'
+            });
+        }
+
         const updatedProfile = await prisma.$transaction(async (tx) => {
             // Update the profile
             const profile = await tx.profiles.update({
@@ -631,7 +803,8 @@ app.put('/api/users/me', requireAuth, async (req: AuthRequest, res: Response) =>
                 vehicle_model_name !== undefined ||
                 parsedLastOilChangeMileage !== undefined ||
                 parsedLastOilChangeDate !== undefined ||
-                parsedMonthlyAvgMileage !== undefined
+                parsedMonthlyAvgMileage !== undefined ||
+                parsedOilChangeIntervalKm !== undefined
             )) {
                 vehicle = await tx.vehicles.update({
                     where: { id: vehicle.id },
@@ -643,9 +816,49 @@ app.put('/api/users/me', requireAuth, async (req: AuthRequest, res: Response) =>
                         monthly_avg_mileage: parsedMonthlyAvgMileage,
                     }
                 });
+
+                if (parsedOilChangeIntervalKm !== undefined) {
+                    if (parsedOilChangeIntervalKm === null) {
+                        await tx.maintenance_settings.deleteMany({
+                            where: {
+                                vehicle_id: vehicle.id,
+                                item_name: { in: OIL_MAINTENANCE_ITEM_NAMES }
+                            }
+                        });
+                    } else {
+                        const existingOilSetting = await tx.maintenance_settings.findFirst({
+                            where: {
+                                vehicle_id: vehicle.id,
+                                item_name: { in: OIL_MAINTENANCE_ITEM_NAMES }
+                            }
+                        });
+
+                        if (existingOilSetting) {
+                            await tx.maintenance_settings.update({
+                                where: { id: existingOilSetting.id },
+                                data: {
+                                    item_name: 'oil',
+                                    interval_km: parsedOilChangeIntervalKm
+                                }
+                            });
+                        } else {
+                            await tx.maintenance_settings.create({
+                                data: {
+                                    vehicle_id: vehicle.id,
+                                    item_name: 'oil',
+                                    interval_km: parsedOilChangeIntervalKm
+                                }
+                            });
+                        }
+                    }
+                }
             }
 
-            return { ...profile, vehicles: vehicle ? [vehicle] : [] };
+            const vehiclesWithMaintenanceStatus = vehicle
+                ? [await buildVehicleWithMaintenanceStatus(tx, vehicle)]
+                : [];
+
+            return { ...profile, vehicles: vehiclesWithMaintenanceStatus };
         });
 
         res.json({ message: 'Profile updated successfully', data: updatedProfile });
@@ -751,6 +964,7 @@ app.post('/api/health/analyze', requireAuth, upload.single('image'), async (req:
 
         const userId = req.user.id;
         const logType = req.body.log_type as HealthLogType;
+        const manualMileageInput = req.body.manual_mileage;
         const file = req.file;
 
         if (!logType || !file) {
@@ -762,6 +976,15 @@ app.post('/api/health/analyze', requireAuth, upload.single('image'), async (req:
             return res.status(400).json({ error: 'Unsupported log_type' });
         }
 
+        let manualMileage: number | null = null;
+        if (manualMileageInput !== undefined && manualMileageInput !== null && manualMileageInput !== '') {
+            const parsedManualMileage = Number(manualMileageInput);
+            if (!Number.isFinite(parsedManualMileage) || parsedManualMileage < 0) {
+                return res.status(400).json({ error: 'Invalid manual_mileage' });
+            }
+            manualMileage = Math.trunc(parsedManualMileage);
+        }
+
         // Get the user's primary vehicle (assuming 1 vehicle per user for now)
         const vehicle = await prisma.vehicles.findFirst({
             where: { user_id: userId }
@@ -771,29 +994,60 @@ app.post('/api/health/analyze', requireAuth, upload.single('image'), async (req:
             return res.status(404).json({ error: 'Vehicle not found' });
         }
 
+        if (
+            manualMileage !== null &&
+            vehicle.last_oil_change_mileage !== null &&
+            vehicle.last_oil_change_mileage !== undefined &&
+            manualMileage < vehicle.last_oil_change_mileage
+        ) {
+            return res.status(400).json({
+                error: `現在の走行距離は前回オイル交換時の走行距離以上で入力してください。前回オイル交換時: ${vehicle.last_oil_change_mileage.toLocaleString()}km`
+            });
+        }
+
         // Tire, Chain, Plug, Engine visual checks
         const analysisResult = await aiAnalyzer.analyzeComponent(file.buffer, logType, file.mimetype);
+        const mileageToSave = manualMileage ?? analysisResult.mileage ?? null;
+        const scoreToSave = analysisResult.isTargetDetected === false ? null : analysisResult.score;
+        const mediaPath = await uploadHealthMediaOrThrow(file, userId, vehicle.id, 'image');
 
-        // Save the result to health_logs
-        const healthLog = await prisma.health_logs.create({
-            data: {
-                vehicle_id: vehicle.id,
-                log_type: logType,
-                // In a real app we would upload the buffer to S3/Supabase Storage and save the URL here
-                media_url: null,
-                detected_mileage: analysisResult.mileage,
-                ai_score: analysisResult.score,
-                ai_feedback: analysisResult.feedback,
-                raw_ai_response: analysisResult.rawResponse
+        const result = await prisma.$transaction(async (tx) => {
+            const healthLog = await tx.health_logs.create({
+                data: {
+                    vehicle_id: vehicle.id,
+                    log_type: logType,
+                    media_url: mediaPath,
+                    detected_mileage: mileageToSave,
+                    ai_score: scoreToSave,
+                    ai_feedback: analysisResult.feedback,
+                    raw_ai_response: analysisResult.rawResponse
+                }
+            });
+
+            let updatedVehicle = vehicle;
+            if (mileageToSave !== null) {
+                updatedVehicle = await tx.vehicles.update({
+                    where: { id: vehicle.id },
+                    data: {
+                        current_mileage: mileageToSave
+                    }
+                });
             }
+
+            return { healthLog, updatedVehicle };
         });
 
         console.log(`[Health API] Successfully processed ${logType} analysis for user: ${userId}`);
         res.status(200).json({
             message: 'Analysis completed successfully',
             data: {
-                log: healthLog,
-                analysis: analysisResult
+                log: result.healthLog,
+                analysis: {
+                    ...analysisResult,
+                    mileage: mileageToSave,
+                    mileageSource: manualMileage !== null ? 'manual' : (analysisResult.mileage !== undefined ? 'ai' : null)
+                },
+                vehicle: result.updatedVehicle
             }
         });
 
@@ -825,16 +1079,18 @@ app.post('/api/health/analyze-audio', requireAuth, upload.single('audio'), async
             return res.status(404).json({ error: 'Vehicle not found' });
         }
 
-        // Run mock AI engine sound analysis
-        const analysisResult = await aiAnalyzer.analyzeEngineSound(file.buffer);
+        // Run Gemini-based engine sound analysis
+        const analysisResult = await aiAnalyzer.analyzeEngineSound(file.buffer, file.mimetype);
+        const scoreToSave = analysisResult.isEngineSound === false ? null : analysisResult.score;
+        const mediaPath = await uploadHealthMediaOrThrow(file, userId, vehicle.id, 'audio');
 
         // Save to health_logs
         const healthLog = await prisma.health_logs.create({
             data: {
                 vehicle_id: vehicle.id,
                 log_type: 'engine',
-                media_url: null,
-                ai_score: analysisResult.score,
+                media_url: mediaPath,
+                ai_score: scoreToSave,
                 ai_feedback: analysisResult.feedback,
                 raw_ai_response: analysisResult.rawResponse
             }
@@ -852,6 +1108,85 @@ app.post('/api/health/analyze-audio', requireAuth, upload.single('audio'), async
     } catch (error: any) {
         console.error('Engine Sound Analysis Error:', error);
         res.status(500).json({ error: 'Internal Server Error during engine sound analysis' });
+    }
+});
+
+app.put('/api/health/mileage', requireAuth, async (req: AuthRequest, res: Response) => {
+    try {
+        if (!req.user) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+
+        const userId = req.user.id;
+        const { mileage } = req.body;
+
+        if (mileage === undefined || mileage === null || mileage === '') {
+            return res.status(400).json({ error: 'mileage is required' });
+        }
+
+        const parsedMileage = Number(mileage);
+        if (!Number.isFinite(parsedMileage) || parsedMileage < 0) {
+            return res.status(400).json({ error: 'Invalid mileage' });
+        }
+
+        const vehicle = await prisma.vehicles.findFirst({
+            where: { user_id: userId }
+        });
+
+        if (!vehicle) {
+            return res.status(404).json({ error: 'Vehicle not found' });
+        }
+
+        const normalizedMileage = Math.trunc(parsedMileage);
+
+        if (
+            vehicle.last_oil_change_mileage !== null &&
+            vehicle.last_oil_change_mileage !== undefined &&
+            normalizedMileage < vehicle.last_oil_change_mileage
+        ) {
+            return res.status(400).json({
+                error: `現在の走行距離は前回オイル交換時の走行距離以上で入力してください。前回オイル交換時: ${vehicle.last_oil_change_mileage.toLocaleString()}km`
+            });
+        }
+
+        const result = await prisma.$transaction(async (tx) => {
+            const updatedVehicle = await tx.vehicles.update({
+                where: { id: vehicle.id },
+                data: {
+                    current_mileage: normalizedMileage
+                }
+            });
+
+            const healthLog = await tx.health_logs.create({
+                data: {
+                    vehicle_id: vehicle.id,
+                    log_type: 'engine',
+                    media_url: null,
+                    detected_mileage: normalizedMileage,
+                    ai_feedback: '手動ODO入力により走行距離を更新しました。',
+                    raw_ai_response: {
+                        type: 'manual_mileage',
+                        mileage: normalizedMileage
+                    }
+                }
+            });
+
+            return { updatedVehicle, healthLog };
+        });
+
+        const vehicleWithMaintenanceStatus = await buildVehicleWithMaintenanceStatus(prisma, result.updatedVehicle);
+
+        return res.status(200).json({
+            message: 'Mileage updated successfully',
+            data: {
+                vehicle: vehicleWithMaintenanceStatus,
+                log: result.healthLog,
+                mileage: normalizedMileage
+            }
+        });
+    } catch (error) {
+        console.error('Health Mileage Update Error:', error);
+        return res.status(500).json({ error: 'Internal Server Error during mileage update' });
     }
 });
 

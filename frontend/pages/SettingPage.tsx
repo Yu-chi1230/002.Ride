@@ -18,6 +18,7 @@ const formatDateForInput = (value: string | Date | null | undefined): string => 
 function SettingPage() {
     const navigate = useNavigate();
     const { profileData, refreshProfile } = useAuth();
+    const oilMaintenanceStatus = profileData?.vehicles?.[0]?.oil_maintenance_status ?? null;
 
     // Status states
     const [isEditing, setIsEditing] = useState(false);
@@ -36,7 +37,8 @@ function SettingPage() {
     const [oilFormData, setOilFormData] = useState({
         last_oil_change_date: '',
         last_oil_change_mileage: '',
-        monthly_avg_mileage: ''
+        monthly_avg_mileage: '',
+        oil_change_interval_km: ''
     });
 
     // Cropper states
@@ -67,7 +69,8 @@ function SettingPage() {
             setOilFormData({
                 last_oil_change_date: formatDateForInput(vehicle?.last_oil_change_date),
                 last_oil_change_mileage: vehicle?.last_oil_change_mileage?.toString() || '',
-                monthly_avg_mileage: vehicle?.monthly_avg_mileage?.toString() || ''
+                monthly_avg_mileage: vehicle?.monthly_avg_mileage?.toString() || '',
+                oil_change_interval_km: vehicle?.oil_maintenance_status?.interval_km?.toString() || ''
             });
         }
     }, [profileData]);
@@ -127,6 +130,7 @@ function SettingPage() {
         try {
             const parsedOilMileage = oilFormData.last_oil_change_mileage === '' ? null : Number(oilFormData.last_oil_change_mileage);
             const parsedMonthlyAvgMileage = oilFormData.monthly_avg_mileage === '' ? null : Number(oilFormData.monthly_avg_mileage);
+            const parsedOilChangeIntervalKm = oilFormData.oil_change_interval_km === '' ? null : Number(oilFormData.oil_change_interval_km);
 
             if (parsedOilMileage !== null && (!Number.isFinite(parsedOilMileage) || parsedOilMileage < 0)) {
                 setMessage({ text: '前回オイル交換時の走行距離は0以上の数値で入力してください。', type: 'error' });
@@ -140,12 +144,19 @@ function SettingPage() {
                 return;
             }
 
+            if (parsedOilChangeIntervalKm !== null && (!Number.isFinite(parsedOilChangeIntervalKm) || parsedOilChangeIntervalKm < 0)) {
+                setMessage({ text: 'オイル交換サイクルは0以上の数値で入力してください。', type: 'error' });
+                setIsLoading(false);
+                return;
+            }
+
             const response = await apiFetch('/api/users/me', {
                 method: 'PUT',
                 body: JSON.stringify({
                     last_oil_change_date: oilFormData.last_oil_change_date || null,
                     last_oil_change_mileage: parsedOilMileage,
-                    monthly_avg_mileage: parsedMonthlyAvgMileage
+                    monthly_avg_mileage: parsedMonthlyAvgMileage,
+                    oil_change_interval_km: parsedOilChangeIntervalKm
                 })
             });
 
@@ -437,6 +448,29 @@ function SettingPage() {
                                 inputMode="numeric"
                             />
                         </div>
+
+                        <div className="form-group">
+                            <label>　オイル交換サイクル (km)</label>
+                            <input
+                                type="number"
+                                name="oil_change_interval_km"
+                                value={oilFormData.oil_change_interval_km}
+                                onChange={handleOilInputChange}
+                                min="0"
+                                step="1"
+                                inputMode="numeric"
+                            />
+                        </div>
+
+                        <p className="setting-help-text" style={{ marginTop: '0.25rem', marginBottom: '1rem' }}>
+                            {oilMaintenanceStatus
+                                ? oilMaintenanceStatus.remaining_km === null
+                                    ? '交換推奨までの残距離を計算するには、現在走行距離と前回交換時走行距離の両方が必要です。'
+                                    : oilMaintenanceStatus.is_overdue
+                                        ? `交換推奨距離を${Math.abs(oilMaintenanceStatus.remaining_km).toLocaleString()}km超過しています。`
+                                        : `交換推奨まであと${oilMaintenanceStatus.remaining_km.toLocaleString()}kmです。`
+                                : '交換推奨までの残距離を表示するには、オイル交換サイクルを設定してください。'}
+                        </p>
 
                         <button
                             type="button"

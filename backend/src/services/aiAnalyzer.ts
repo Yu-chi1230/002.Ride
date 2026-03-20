@@ -5,6 +5,8 @@ export interface AIAnalysisResult {
     mileage?: number;
     score?: number;
     feedback?: string;
+    isEngineSound?: boolean;
+    isTargetDetected?: boolean;
 }
 
 export type HealthLogType = 'engine' | 'tire' | 'chain' | 'plug';
@@ -28,15 +30,32 @@ class AIAnalyzer {
         return `
 あなたは熟練の二輪整備士です。画像を見て「${type}」の状態を判定してください。
 次のルールを守ってください:
+- isTargetDetected: 画像内に「${type}」の点検対象が十分に写っていて判定可能ならtrue、そうでなければfalse
 - score: 0.0〜1.0（1.0に近いほど良好）
 - feedback: 日本語で、ユーザー向けに簡潔かつ具体的に
-- 画像が不鮮明で判定不能な場合は、その旨をfeedbackに明記し、scoreを0.5にする
+- 画像が不鮮明、別部位、対象が写っていないなどで判定不能な場合は、isTargetDetected を false にし、その旨をfeedbackに明記する
+`;
+    }
+
+    private getAudioPrompt(): string {
+        return `
+あなたは熟練の二輪整備士です。バイクのエンジン音を聞いて状態を判定してください。
+次のルールを守ってください:
+- isEngineSound: バイクのエンジン音として判定可能ならtrue、そうでなければfalse
+- score: 0.0〜1.0（1.0に近いほど良好）
+- feedback: 日本語で、ユーザー向けに簡潔かつ具体的に
+- 正常、注意、異常のいずれかが分かる表現にする
+- 音声が短すぎる、雑音が強い、判定不能な場合はその旨をfeedbackに明記し、scoreを0.5前後にする
+- エンジン音ではない場合は isEngineSound を false にし、feedback にその旨を明記する
+- 根拠のない断定は避け、点検推奨が必要なら明記する
 `;
     }
 
     private readonly responseSchema: Schema = {
         type: Type.OBJECT,
         properties: {
+            isTargetDetected: { type: Type.BOOLEAN, description: 'Whether the requested part is visible and diagnosable in the image' },
+            isEngineSound: { type: Type.BOOLEAN, description: 'Whether the audio is motorcycle engine sound' },
             score: { type: Type.NUMBER, description: '0.0 to 1.0' },
             feedback: { type: Type.STRING, description: 'Japanese diagnosis text for users' }
         },
@@ -92,50 +111,82 @@ class AIAnalyzer {
             throw new Error("Gemini API returned empty response.");
         }
 
-        const parsed = JSON.parse(responseText) as { score: number; feedback: string };
+        const parsed = JSON.parse(responseText) as { isTargetDetected?: boolean; score: number; feedback: string };
         const score = this.clampScore(parsed.score);
         const feedback = (parsed.feedback || '診断結果を取得できませんでした。').trim();
+        const isTargetDetected = parsed.isTargetDetected !== false;
 
         return {
             rawResponse: {
                 type: 'gemini_vision',
                 component: type,
+                isTargetDetected,
                 score,
                 feedback,
                 model: 'gemini-2.5-flash'
             },
             score,
             feedback,
+            isTargetDetected,
         };
     }
 
     /**
-     * エンジン音の解析モック
-     * 将来的に音声AI（TensorFlow.js / Google Audio Intelligence API等）に差し替える
+     * エンジン音の実解析
      */
-    async analyzeEngineSound(audioBuffer: Buffer): Promise<AIAnalysisResult> {
-        console.log(`[AIAnalyzer Mock] Analyzing engine sound (${audioBuffer.length} bytes)...`);
-
-        const mockScore = Math.round((Math.random() * 0.51 + 0.49) * 100) / 100; // 0.49〜1.0
-        const displayScore = Math.round(mockScore * 100);
-        let status: string;
-        let mockFeedback: string;
-
-        if (mockScore >= 0.8) {
-            status = '正常';
-            mockFeedback = 'エンジン音は正常です。異常な振動や打音は検出されませんでした。';
-        } else if (mockScore >= 0.6) {
-            status = '注意';
-            mockFeedback = 'エンジン音にわずかな不規則性が検出されました。次回の点検時に確認することをお勧めします。';
-        } else {
-            status = '異常';
-            mockFeedback = '警告: エンジン音に異常なノッキングまたは金属音が検出されました。早急な点検をお勧めします。';
+    async analyzeEngineSound(
+        audioBuffer: Buffer,
+        mimeType: string = 'audio/webm'
+    ): Promise<AIAnalysisResult> {
+        if (!this.ai) {
+            throw new Error("Gemini AI client is not initialized. Check GEMINI_API_KEY.");
         }
 
+        console.log(`[AIAnalyzer Gemini] Analyzing engine sound (${audioBuffer.length} bytes, ${mimeType})...`);
+
+        const response = await this.ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: [{
+                role: 'user',
+                parts: [
+                    { text: this.getAudioPrompt() },
+                    {
+                        inlineData: {
+                            mimeType,
+                            data: audioBuffer.toString('base64')
+                        }
+                    }
+                ]
+            }],
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: this.responseSchema,
+                temperature: 0.2
+            }
+        });
+
+        const responseText = response.text;
+        if (!responseText) {
+            throw new Error("Gemini API returned empty response for engine sound analysis.");
+        }
+
+        const parsed = JSON.parse(responseText) as { isEngineSound?: boolean; score: number; feedback: string };
+        const score = this.clampScore(parsed.score);
+        const feedback = (parsed.feedback || '診断結果を取得できませんでした。').trim();
+        const isEngineSound = parsed.isEngineSound !== false;
+
         return {
-            rawResponse: { type: 'mock_audio', score: mockScore, displayScore, status, feedback: mockFeedback },
-            score: mockScore,
-            feedback: `【${status}】 ${mockFeedback}`,
+            rawResponse: {
+                type: 'gemini_audio',
+                isEngineSound,
+                score,
+                feedback,
+                mimeType,
+                model: 'gemini-2.5-flash'
+            },
+            score,
+            feedback,
+            isEngineSound,
         };
     }
 }

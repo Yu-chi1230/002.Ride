@@ -12,6 +12,13 @@ export type VehicleData = {
     last_oil_change_mileage: number | null;
     last_oil_change_date: string | null;
     monthly_avg_mileage: number | null;
+    oil_maintenance_status: {
+        item_name: string;
+        interval_km: number;
+        distance_since_last_change: number | null;
+        remaining_km: number | null;
+        is_overdue: boolean;
+    } | null;
 };
 
 export type ProfileData = {
