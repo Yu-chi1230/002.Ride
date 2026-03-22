@@ -1,186 +1,218 @@
-import React, { useState, useRef } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { ImagePlus } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
+import { apiFetch } from '../src/lib/api';
 import './CreatePage.css';
 
-// CSS filter equivalent for themes to use with Canvas API for export
 const THEMES = [
-    {
-        id: 'original',
-        name: 'Original',
-        filter: 'none',
-        img: 'https://images.unsplash.com/photo-1558981403-c5f9899a28bc?w=400&q=80'
-    },
     {
         id: 'cyberpunk',
         name: 'Cyberpunk',
-        filter: 'contrast(1.2) saturate(1.4) hue-rotate(-15deg)',
         img: 'https://images.unsplash.com/photo-1555626906-fcf10d6851b4?w=400&q=80'
     },
     {
         id: 'vintage',
         name: 'Vintage',
-        filter: 'sepia(0.3) contrast(1.1) brightness(0.9) saturate(0.8)',
         img: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?w=400&q=80'
     },
     {
         id: 'action',
         name: 'Action Movie',
-        filter: 'contrast(1.3) saturate(0.8) brightness(0.9)',
         img: 'https://images.unsplash.com/photo-1583120155095-200424d5ba7a?w=400&q=80'
     },
     {
         id: 'romantic',
         name: 'Romantic',
-        filter: 'brightness(1.1) contrast(0.9) saturate(0.9) sepia(0.1)',
         img: 'https://images.unsplash.com/photo-1522204523234-8729aa6e3d5f?w=400&q=80'
     }
-];
+] as const;
+
+type ThemeId = typeof THEMES[number]['id'];
+
+type CreateImageItem = {
+    file: File;
+    previewUrl: string;
+    processedUrl: string | null;
+};
+
+type ProcessedImageResponse = {
+    index: number;
+    filename: string;
+    mime_type: string;
+    data_url: string;
+};
 
 function CreatePage() {
-    // State
-    const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+    const [images, setImages] = useState<CreateImageItem[]>([]);
     const [selectedImageIndex, setSelectedImageIndex] = useState(0);
-    const [selectedThemeId, setSelectedThemeId] = useState<string>(THEMES[0].id);
-    const [sliderValue, setSliderValue] = useState(50); // 0-100%
-    const [isExporting, setIsExporting] = useState(false);
+    const [selectedThemeId, setSelectedThemeId] = useState<ThemeId>(THEMES[0].id);
+    const [sliderValue, setSliderValue] = useState(50);
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [colorLogicMemo, setColorLogicMemo] = useState<string | null>(null);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const replaceInputRef = useRef<HTMLInputElement>(null);
-    const imageRef = useRef<HTMLImageElement>(null);
-    const canvasRef = useRef<HTMLCanvasElement>(null);
+
+    const currentImage = images[selectedImageIndex] ?? null;
+    const currentImageUrl = currentImage?.previewUrl ?? null;
+    const currentProcessedUrl = currentImage?.processedUrl ?? null;
+
+    const hasProcessedImages = useMemo(
+        () => images.some((image) => image.processedUrl !== null),
+        [images]
+    );
+
+    const appendFiles = (files: File[]) => {
+        const nextItems = files.map((file) => ({
+            file,
+            previewUrl: URL.createObjectURL(file),
+            processedUrl: null
+        }));
+
+        setImages((prev) => {
+            const next = [...prev, ...nextItems];
+            if (prev.length === 0 && next.length > 0) {
+                setSelectedImageIndex(0);
+            }
+            return next;
+        });
+        setSliderValue(50);
+        setColorLogicMemo(null);
+    };
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
-            const filesArray = Array.from(e.target.files);
-            const urls = filesArray.map(f => URL.createObjectURL(f));
-            setPreviewUrls(prev => [...prev, ...urls]);
-
-            // If it's the first upload, select the first image
-            if (previewUrls.length === 0) {
-                setSelectedImageIndex(0);
-                setSliderValue(50); // reset slider
-            }
+            appendFiles(Array.from(e.target.files));
         }
-        // 同じ画像を再度選択できるように値をリセット
         e.target.value = '';
     };
 
     const handleReplaceSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
             const file = e.target.files[0];
-            const url = URL.createObjectURL(file);
-            setPreviewUrls(prev => {
-                const newUrls = [...prev];
-                newUrls[selectedImageIndex] = url;
-                return newUrls;
-            });
+            const nextItem: CreateImageItem = {
+                file,
+                previewUrl: URL.createObjectURL(file),
+                processedUrl: null
+            };
+
+            setImages((prev) => prev.map((item, index) => (
+                index === selectedImageIndex ? nextItem : item
+            )));
             setSliderValue(50);
+            setColorLogicMemo(null);
         }
-        // 同じ画像を再度選択できるように値をリセット
         e.target.value = '';
     };
 
     const handleRemoveImage = () => {
-        setPreviewUrls(prev => {
-            const newUrls = [...prev];
-            newUrls.splice(selectedImageIndex, 1);
-
-            // Adjust selected index if we removed the last item or the end of the list
-            if (newUrls.length === 0) {
-                // Return to upload state automatically
+        setImages((prev) => {
+            const next = prev.filter((_, index) => index !== selectedImageIndex);
+            if (next.length === 0) {
                 setSelectedImageIndex(0);
-            } else if (selectedImageIndex >= newUrls.length) {
-                setSelectedImageIndex(newUrls.length - 1);
+            } else if (selectedImageIndex >= next.length) {
+                setSelectedImageIndex(next.length - 1);
             }
-            return newUrls;
+            return next;
         });
         setSliderValue(50);
+        setColorLogicMemo(null);
     };
 
     const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setSliderValue(Number(e.target.value));
     };
 
-    const handleDownload = async () => {
-        if (!imageRef.current || !canvasRef.current || previewUrls.length === 0) return;
-
-        setIsExporting(true);
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext('2d');
-        const imgElement = imageRef.current;
-
-        if (!ctx) {
-            alert('Canvas export is not supported in this browser.');
-            setIsExporting(false);
-            return;
-        }
-
-        try {
-            // Set canvas size to original image resolution
-            canvas.width = imgElement.naturalWidth;
-            canvas.height = imgElement.naturalHeight;
-
-            const selectedTheme = THEMES.find(t => t.id === selectedThemeId);
-            if (selectedTheme) {
-                // Apply the CSS filter equivalent to the Canvas context
-                ctx.filter = selectedTheme.filter;
-            }
-
-            // Draw image onto canvas with filter
-            ctx.drawImage(imgElement, 0, 0, canvas.width, canvas.height);
-
-            // Export to blob and trigger download
-            canvas.toBlob((blob) => {
-                if (!blob) throw new Error('Canvas to Blob failed');
-
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `ride_cinematic_${Date.now()}.jpg`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-
-                setIsExporting(false);
-            }, 'image/jpeg', 0.95);
-
-        } catch (err) {
-            console.error('Export error:', err);
-            alert('画像の保存に失敗しました。');
-            setIsExporting(false);
+    const handleThemeChange = (themeId: ThemeId) => {
+        setSelectedThemeId(themeId);
+        setSliderValue(50);
+        if (!hasProcessedImages) {
+            setColorLogicMemo(null);
         }
     };
 
-    // ========== Render ==========
+    const handleGenerate = async () => {
+        if (images.length === 0 || isGenerating) {
+            return;
+        }
 
-    const activeTheme = THEMES.find(t => t.id === selectedThemeId);
-    const currentImageUrl = previewUrls[selectedImageIndex];
+        setIsGenerating(true);
+        setColorLogicMemo(null);
+
+        try {
+            const formData = new FormData();
+            formData.append('theme', selectedThemeId);
+            images.forEach((image) => {
+                formData.append('images', image.file);
+            });
+
+            const response = await apiFetch('/api/create/generate', {
+                method: 'POST',
+                body: formData,
+                timeoutMs: 60000
+            });
+
+            const data = await response.json().catch(() => null);
+
+            if (!response.ok) {
+                throw new Error(data?.error || '画像変換に失敗しました。');
+            }
+
+            const processedImages = Array.isArray(data?.data?.processed_images)
+                ? data.data.processed_images as ProcessedImageResponse[]
+                : [];
+
+            setImages((prev) => prev.map((item, index) => {
+                const processed = processedImages.find((entry) => entry.index === index);
+                return {
+                    ...item,
+                    processedUrl: processed?.data_url ?? null
+                };
+            }));
+            setColorLogicMemo(data?.data?.color_logic_memo ?? null);
+        } catch (error: any) {
+            console.error('Create generate error:', error);
+            alert(error?.message || '画像変換に失敗しました。');
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
+    const handleDownload = () => {
+        if (!currentImageUrl) {
+            return;
+        }
+
+        const downloadUrl = currentProcessedUrl ?? currentImageUrl;
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = `ride_styled_${Date.now()}.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    };
 
     return (
         <div className="create-page">
             <header className="create-header">
-                {selectedThemeId !== 'original' && previewUrls.length > 0 && (
+                {images.length > 0 && (
                     <div className="badge-before" style={{ position: 'relative', bottom: 0, left: 0, opacity: sliderValue > 20 ? 1 : 0 }}>BEFORE</div>
                 )}
 
                 <h1 className="create-title">Create Editor</h1>
 
-                {selectedThemeId !== 'original' && previewUrls.length > 0 && (
+                {images.length > 0 && (
                     <div className="badge-after" style={{ position: 'relative', bottom: 0, right: 0, opacity: sliderValue < 80 ? 1 : 0 }}>AFTER</div>
                 )}
             </header>
 
-            {/* Always show Editor State */}
             <div className="editor-container">
-                {/* Main View Area: Either Image or Upload Button */}
                 <div className="viewport-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {previewUrls.length === 0 ? (
+                    {images.length === 0 ? (
                         <div
                             className="upload-box"
                             onClick={() => fileInputRef.current?.click()}
-                            style={{ width: '100%', aspectRatio: '16/9', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: '1px dashed rgba(255,255,255,0.2)', backgroundColor: 'rgba(13, 17, 23, 0.5)' }}
+                            style={{ width: '80%', aspectRatio: '16/9', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: '1px dashed rgba(255,255,255,0.2)', backgroundColor: 'rgba(13, 17, 23, 0.5)' }}
                         >
                             <div className="upload-icon" style={{ marginBottom: '1rem', color: '#8B949E' }}>
                                 <ImagePlus strokeWidth={1.5} size={48} />
@@ -192,30 +224,29 @@ function CreatePage() {
                         </div>
                     ) : (
                         <div className="comparison-wrapper">
-                            {/* Background Image (Before) */}
-                            <img
-                                src={currentImageUrl}
-                                alt="Before"
-                                className="img-before"
-                                style={{ filter: 'none' }}
-                            />
+                            {currentImageUrl && (
+                                <img
+                                    src={currentImageUrl}
+                                    alt="Before"
+                                    className="img-before"
+                                    style={{ filter: 'none' }}
+                                />
+                            )}
 
-                            {/* Foreground Image (After) - Clipped based on slider */}
-                            <img
-                                src={currentImageUrl}
-                                alt="After"
-                                className="img-after"
-                                style={{
-                                    clipPath: `inset(0 0 0 ${sliderValue}%)`,
-                                    filter: activeTheme?.filter || 'none'
-                                }}
-                            />
+                            {currentProcessedUrl && (
+                                <img
+                                    src={currentProcessedUrl}
+                                    alt="After"
+                                    className="img-after"
+                                    style={{
+                                        clipPath: `inset(0 0 0 ${sliderValue}%)`,
+                                    }}
+                                />
+                            )}
 
-                            {/* Slider UI */}
-                            {selectedThemeId !== 'original' && (
+                            {currentProcessedUrl && (
                                 <>
                                     <div className="slider-handle-line" style={{ left: `${sliderValue}%` }} />
-                                    {/* Make sure the visual button has pointer-events: none in CSS */}
                                     <div className="slider-handle-button" style={{ left: `${sliderValue}%` }}>
                                         <span style={{ transform: 'scaleX(1.5)', display: 'inline-block' }}>|</span>
                                     </div>
@@ -233,25 +264,23 @@ function CreatePage() {
                     )}
                 </div>
 
-                {/* Thumbnail Selector & Actions */}
-                {previewUrls.length > 0 && (
+                {images.length > 0 && (
                     <div className="toolbar-section">
                         <div className="section-label">SELECTED PICTURES</div>
                         <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
                             <div className="image-selector" style={{ margin: 0, paddingLeft: '1.2rem', paddingRight: '0.4rem', flex: 1, minWidth: 0 }}>
-                                {previewUrls.map((url, idx) => (
+                                {images.map((image, idx) => (
                                     <img
-                                        key={idx}
-                                        src={url}
+                                        key={`${image.previewUrl}-${idx}`}
+                                        src={image.processedUrl ?? image.previewUrl}
                                         alt={`thumb ${idx}`}
                                         className={`thumb-item ${selectedImageIndex === idx ? 'active' : ''}`}
                                         onClick={() => {
                                             setSelectedImageIndex(idx);
-                                            setSliderValue(50); // reset slider for new image
+                                            setSliderValue(50);
                                         }}
                                     />
                                 ))}
-                                {/* Simple add button for more photos */}
                                 <div
                                     className="thumb-item"
                                     style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: '1px solid rgba(212, 175, 55, 0.3)', color: '#D4AF37', fontSize: '1.2rem', opacity: 1, fontWeight: 300, flexShrink: 0 }}
@@ -260,7 +289,6 @@ function CreatePage() {
                                     +
                                 </div>
                             </div>
-                            {/* Action buttons for current image */}
                             <div className="current-image-actions" style={{
                                 flexShrink: 0,
                                 margin: 0,
@@ -268,7 +296,7 @@ function CreatePage() {
                                 flexDirection: 'column',
                                 alignItems: 'stretch',
                                 justifyContent: 'space-between',
-                                height: '60px', /* Match thumb-item height */
+                                height: '60px',
                                 gap: '0.4rem',
                                 paddingLeft: '0.8rem'
                             }}>
@@ -301,16 +329,15 @@ function CreatePage() {
                     </div>
                 )}
 
-                {/* Themes Tool bar */}
                 <div className="toolbar-section">
                     <div className="section-label">COLOR GRADING PRESETS</div>
                     <div className="theme-scroller">
-                        {THEMES.map(theme => (
+                        {THEMES.map((theme) => (
                             <div
                                 key={theme.id}
                                 className={`theme-card ${selectedThemeId === theme.id ? 'active' : ''}`}
                                 style={{ backgroundImage: `url(${theme.img})` }}
-                                onClick={() => setSelectedThemeId(theme.id)}
+                                onClick={() => handleThemeChange(theme.id)}
                             >
                                 <div className="theme-card-overlay" />
                                 <div className="theme-card-title">{theme.name}</div>
@@ -319,25 +346,41 @@ function CreatePage() {
                     </div>
                 </div>
 
-                {/* Actions */}
+                {colorLogicMemo && (
+                    <div className="toolbar-section" style={{ paddingTop: '0.4rem' }}>
+                        <div className="section-label">STYLE NOTE</div>
+                        <div style={{
+                            margin: '0 1.2rem 1rem',
+                            padding: '0.9rem 1rem',
+                            border: '1px solid rgba(212, 175, 55, 0.22)',
+                            background: 'rgba(22, 27, 34, 0.75)',
+                            color: '#E6EDF3',
+                            lineHeight: 1.7,
+                            fontSize: '0.88rem'
+                        }}>
+                            {colorLogicMemo}
+                        </div>
+                    </div>
+                )}
+
                 <div className="action-buttons">
                     <button
                         className="btn-primary"
-                        onClick={handleDownload}
-                        disabled={isExporting || previewUrls.length === 0}
+                        onClick={handleGenerate}
+                        disabled={isGenerating || images.length === 0}
                     >
-                        {isExporting ? '保存中...' : '画像を保存する'}
+                        {isGenerating ? '変換中...' : 'カラー変換を適用'}
                     </button>
-                    <button className="btn-secondary" disabled={previewUrls.length === 0}>
-                        シェアする
+                    <button
+                        className="btn-secondary"
+                        onClick={handleDownload}
+                        disabled={images.length === 0}
+                    >
+                        画像を保存する
                     </button>
                 </div>
-
-                {/* Hidden canvas for export */}
-                <canvas ref={canvasRef} className="export-canvas" />
             </div>
 
-            {/* Hidden file input for uploads */}
             <input
                 type="file"
                 multiple
@@ -347,7 +390,6 @@ function CreatePage() {
                 onChange={handleFileSelect}
             />
 
-            {/* Hidden file input for replace (single) */}
             <input
                 type="file"
                 accept="image/*"

@@ -7,11 +7,17 @@ interface TouchSliderProps {
     step: number;
     value: number;
     onChange: (value: number) => void;
+    onChangeEnd?: (value: number) => void;
 }
 
-const TouchSlider: React.FC<TouchSliderProps> = ({ min, max, step, value, onChange }) => {
+const TouchSlider: React.FC<TouchSliderProps> = ({ min, max, step, value, onChange, onChangeEnd }) => {
     const trackRef = useRef<HTMLDivElement>(null);
+    const latestValueRef = useRef(value);
     const [isDragging, setIsDragging] = useState(false);
+
+    useEffect(() => {
+        latestValueRef.current = value;
+    }, [value]);
 
     const calculateValue = (clientX: number) => {
         if (!trackRef.current) return;
@@ -59,6 +65,7 @@ const TouchSlider: React.FC<TouchSliderProps> = ({ min, max, step, value, onChan
 
         const handleTouchEnd = () => {
             setIsDragging(false);
+            onChangeEnd?.(latestValueRef.current);
         };
 
         if (isDragging) {
@@ -74,7 +81,7 @@ const TouchSlider: React.FC<TouchSliderProps> = ({ min, max, step, value, onChan
             window.removeEventListener('mouseup', handleTouchEnd);
             window.removeEventListener('touchend', handleTouchEnd);
         };
-    }, [isDragging, min, max, step]);
+    }, [isDragging, min, max, step, onChangeEnd]);
 
     const progress = ((value - min) / (max - min)) * 100;
 

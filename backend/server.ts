@@ -76,6 +76,7 @@ interface AuthRequest extends Request {
 }
 
 const OIL_MAINTENANCE_ITEM_NAMES = ['oil', 'engine_oil'];
+const MANUAL_OIL_CHANGE_HISTORY_NOTE_MARKER = 'source=manual_oil_change_registration';
 
 const inferFileExtension = (file: Express.Multer.File) => {
     const originalExt = extname(file.originalname || '').toLowerCase();
@@ -157,6 +158,57 @@ const buildVehicleWithMaintenanceStatus = async (db: any, vehicle: any) => {
             is_overdue: remainingKm !== null ? remainingKm <= 0 : false
         } : null
     };
+};
+
+const formatDateOnly = (value: Date | null | undefined) => {
+    if (!value) {
+        return null;
+    }
+
+    return value.toISOString().slice(0, 10);
+};
+
+const hasOilChangeStateChanged = (
+    previousVehicle: { last_oil_change_mileage: number | null; last_oil_change_date: Date | null },
+    nextVehicle: { last_oil_change_mileage: number | null; last_oil_change_date: Date | null }
+) => {
+    return previousVehicle.last_oil_change_mileage !== nextVehicle.last_oil_change_mileage ||
+        formatDateOnly(previousVehicle.last_oil_change_date) !== formatDateOnly(nextVehicle.last_oil_change_date);
+};
+
+const syncManualOilChangeHistory = async (
+    tx: any,
+    vehicle: { id: string; last_oil_change_mileage: number | null; last_oil_change_date: Date | null }
+) => {
+    await tx.maintenance_history.deleteMany({
+        where: {
+            vehicle_id: vehicle.id,
+            action_type: 'オイル交換',
+            notes: { contains: MANUAL_OIL_CHANGE_HISTORY_NOTE_MARKER }
+        }
+    });
+
+    if (vehicle.last_oil_change_mileage === null || vehicle.last_oil_change_mileage === undefined) {
+        return;
+    }
+
+    const noteParts = [MANUAL_OIL_CHANGE_HISTORY_NOTE_MARKER];
+
+    if (vehicle.last_oil_change_date) {
+        noteParts.push(`last_oil_change_date=${formatDateOnly(vehicle.last_oil_change_date)}`);
+    }
+
+    noteParts.push(`last_oil_change_mileage=${vehicle.last_oil_change_mileage}`);
+
+    await tx.maintenance_history.create({
+        data: {
+            vehicle_id: vehicle.id,
+            action_type: 'オイル交換',
+            executed_at: vehicle.last_oil_change_date ?? new Date(),
+            mileage_at_execution: vehicle.last_oil_change_mileage,
+            notes: noteParts.join(', ')
+        }
+    });
 };
 
 // Supabase JWT Verification Middleware
@@ -806,6 +858,11 @@ app.put('/api/users/me', requireAuth, async (req: AuthRequest, res: Response) =>
                 parsedMonthlyAvgMileage !== undefined ||
                 parsedOilChangeIntervalKm !== undefined
             )) {
+                const previousVehicle = {
+                    last_oil_change_mileage: vehicle.last_oil_change_mileage,
+                    last_oil_change_date: vehicle.last_oil_change_date
+                };
+
                 vehicle = await tx.vehicles.update({
                     where: { id: vehicle.id },
                     data: {
@@ -816,6 +873,16 @@ app.put('/api/users/me', requireAuth, async (req: AuthRequest, res: Response) =>
                         monthly_avg_mileage: parsedMonthlyAvgMileage,
                     }
                 });
+
+                if (
+                    (parsedLastOilChangeMileage !== undefined || parsedLastOilChangeDate !== undefined) &&
+                    hasOilChangeStateChanged(previousVehicle, {
+                        last_oil_change_mileage: vehicle.last_oil_change_mileage,
+                        last_oil_change_date: vehicle.last_oil_change_date
+                    })
+                ) {
+                    await syncManualOilChangeHistory(tx, vehicle);
+                }
 
                 if (parsedOilChangeIntervalKm !== undefined) {
                     if (parsedOilChangeIntervalKm === null) {
@@ -834,6 +901,20 @@ app.put('/api/users/me', requireAuth, async (req: AuthRequest, res: Response) =>
                         });
 
                         if (existingOilSetting) {
+                            if (existingOilSetting.interval_km !== parsedOilChangeIntervalKm) {
+                                await tx.maintenance_history.create({
+                                    data: {
+                                        vehicle_id: vehicle.id,
+                                        action_type: 'maintenance_settings更新',
+                                        mileage_at_execution:
+                                            vehicle.current_mileage ??
+                                            vehicle.last_oil_change_mileage ??
+                                            0,
+                                        notes: `item_name=${existingOilSetting.item_name}, previous_interval_km=${existingOilSetting.interval_km}, next_interval_km=${parsedOilChangeIntervalKm}`
+                                    }
+                                });
+                            }
+
                             await tx.maintenance_settings.update({
                                 where: { id: existingOilSetting.id },
                                 data: {
@@ -1192,6 +1273,79 @@ app.put('/api/health/mileage', requireAuth, async (req: AuthRequest, res: Respon
 
 // ===== Explore: ルート生成API =====
 import { suggestCinematicSpotsBase } from './src/services/aiRouteService';
+import { Coordinate, getRoadRoute } from './src/services/routingService';
+import { buildRoutePlanningContext, calculateDirectionalPhotoWindow, calculateSunAngleData } from './src/services/sunService';
+
+const getRouteGeometryFromWaypoints = async (waypoints: Array<{ latitude: number; longitude: number }>) => {
+    if (waypoints.length < 2) {
+        return waypoints.map((wp, index) => ({
+            latitude: wp.latitude,
+            longitude: wp.longitude,
+            order_index: index,
+        }));
+    }
+
+    try {
+        const route = await getRoadRoute(
+            waypoints.map((wp) => ({ lat: wp.latitude, lng: wp.longitude }))
+        );
+
+        return route.geometry.length > 0
+            ? route.geometry
+            : waypoints.map((wp, index) => ({
+                latitude: wp.latitude,
+                longitude: wp.longitude,
+                order_index: index,
+            }));
+    } catch (error) {
+        console.warn('Failed to compute route geometry, falling back to waypoints:', error);
+        return waypoints.map((wp, index) => ({
+            latitude: wp.latitude,
+            longitude: wp.longitude,
+            order_index: index,
+        }));
+    }
+};
+
+const rankRoutesByUpcomingPhotoTiming = <T extends {
+    route?: { total_distance_km?: number | null };
+    cinematic_spots: Array<{ best_photo_time?: Date | string | null }>;
+}>(
+    routes: T[],
+    now: Date
+) => {
+    const nowTime = now.getTime();
+
+    return [...routes].sort((left, right) => {
+        const getNextPhotoTimeDiff = (route: T) => {
+            const futureDiffs = route.cinematic_spots
+                .map((spot) => {
+                    if (!spot.best_photo_time) {
+                        return null;
+                    }
+
+                    const photoTime = new Date(spot.best_photo_time).getTime();
+                    const diff = photoTime - nowTime;
+                    return diff >= 0 ? diff : null;
+                })
+                .filter((value): value is number => value !== null)
+                .sort((a, b) => a - b);
+
+            return futureDiffs[0] ?? Number.POSITIVE_INFINITY;
+        };
+
+        const leftDiff = getNextPhotoTimeDiff(left);
+        const rightDiff = getNextPhotoTimeDiff(right);
+
+        if (leftDiff !== rightDiff) {
+            return leftDiff - rightDiff;
+        }
+
+        const leftDistance = left.route?.total_distance_km ?? Number.POSITIVE_INFINITY;
+        const rightDistance = right.route?.total_distance_km ?? Number.POSITIVE_INFINITY;
+        return leftDistance - rightDistance;
+    });
+};
 
 app.post('/api/explore/routes', requireAuth, async (req: AuthRequest, res: Response) => {
     try {
@@ -1211,28 +1365,29 @@ app.post('/api/explore/routes', requireAuth, async (req: AuthRequest, res: Respo
             where: { user_id: userId }
         });
 
-        // 1. Gemini API からスポット提案を取得 (Google Maps API がないため直線距離のモックルートを構築)
-        const proposalResult = await suggestCinematicSpotsBase(time_limit_minutes, latitude, longitude);
+        const planningDate = new Date();
+        const planningContext = buildRoutePlanningContext(planningDate, latitude, longitude);
+
+        // 1. Gemini API からスポット提案を取得
+        const proposalResult = await suggestCinematicSpotsBase(
+            time_limit_minutes,
+            latitude,
+            longitude,
+            planningContext
+        );
         const generatedRoutes = proposalResult.routes || [];
 
         const savedRoutesData = [];
 
         for (const proposal of generatedRoutes) {
-            // Calculate simple estimated distance and polyline (straight lines between points)
-            let estimatedDistanceKm = 0;
             const allPoints = [
                 { lat: latitude, lng: longitude },
                 ...proposal.spots.map(s => ({ lat: s.latitude, lng: s.longitude })),
                 { lat: latitude, lng: longitude } // Return trip
             ];
 
-            for (let i = 0; i < allPoints.length - 1; i++) {
-                estimatedDistanceKm += getDistanceFromLatLonInKm(
-                    allPoints[i].lat, allPoints[i].lng,
-                    allPoints[i + 1].lat, allPoints[i + 1].lng
-                );
-            }
-            estimatedDistanceKm = Math.round(estimatedDistanceKm * 10) / 10;
+            const roadRoute = await getRoadRoute(allPoints as Coordinate[]);
+            const estimatedDistanceKm = roadRoute.distanceKm;
 
             // Waypoints definition (simplified straight-line path for now)
             const waypointsData = allPoints.map((pt, index) => ({
@@ -1242,13 +1397,33 @@ app.post('/api/explore/routes', requireAuth, async (req: AuthRequest, res: Respo
             }));
 
             // Cinematic spots mapping
-            const cinematicSpotsData = proposal.spots.map((spot) => ({
-                location_name: spot.location_name,
-                shooting_guide: spot.shooting_guide,
-                sun_angle_data: null, // Default
-                latitude: spot.latitude,
-                longitude: spot.longitude,
-            }));
+            const cinematicSpotsData = proposal.spots.map((spot) => {
+                const bestPhotoWindow = calculateDirectionalPhotoWindow(
+                    planningDate,
+                    spot.latitude,
+                    spot.longitude,
+                    spot.preferred_light_direction,
+                    spot.camera_heading_hint
+                );
+                const sunAngleData = {
+                    ...calculateSunAngleData(bestPhotoWindow.midpoint, spot.latitude, spot.longitude),
+                    best_photo_window_start: bestPhotoWindow.start.toISOString(),
+                    best_photo_window_end: bestPhotoWindow.end.toISOString(),
+                    best_photo_window_label: bestPhotoWindow.label,
+                    best_photo_window_reason: bestPhotoWindow.reason,
+                    preferred_light_direction: spot.preferred_light_direction,
+                    camera_heading_hint: spot.camera_heading_hint,
+                };
+
+                return {
+                    best_photo_time: bestPhotoWindow.midpoint,
+                    location_name: spot.location_name,
+                    shooting_guide: spot.shooting_guide,
+                    sun_angle_data: sunAngleData,
+                    latitude: spot.latitude,
+                    longitude: spot.longitude,
+                };
+            });
 
             // 2. Save routing data to DB using Prisma transaction
             const result = await prisma.$transaction(async (tx) => {
@@ -1283,6 +1458,7 @@ app.post('/api/explore/routes', requireAuth, async (req: AuthRequest, res: Respo
                         tx.cinematic_spots.create({
                             data: {
                                 route_id: route.id,
+                                best_photo_time: spot.best_photo_time,
                                 location_name: spot.location_name,
                                 shooting_guide: spot.shooting_guide,
                                 sun_angle_data: spot.sun_angle_data ? spot.sun_angle_data : undefined,
@@ -1303,31 +1479,41 @@ app.post('/api/explore/routes', requireAuth, async (req: AuthRequest, res: Respo
                     time_limit_minutes: result.route.time_limit_minutes,
                     total_distance_km: result.route.total_distance_km,
                 },
+                route_geometry: roadRoute.geometry,
                 waypoints: result.waypointRecords.map((wp) => ({
                     latitude: wp.latitude,
                     longitude: wp.longitude,
                     order_index: wp.order_index,
                 })),
                 cinematic_spots: result.spotRecords.map((spot) => ({
+                    best_photo_time: spot.best_photo_time,
                     location_name: spot.location_name,
                     shooting_guide: spot.shooting_guide,
+                    sun_angle_data: spot.sun_angle_data,
                     latitude: spot.latitude,
                     longitude: spot.longitude,
                 }))
             });
         }
 
-        console.log(`[Explore API] Routes generated for user: ${userId}, count: ${savedRoutesData.length}`);
+        const rankedRoutes = rankRoutesByUpcomingPhotoTiming(savedRoutesData, planningDate);
+
+        console.log(`[Explore API] Routes generated for user: ${userId}, count: ${rankedRoutes.length}`);
         res.status(200).json({
             message: 'Routes generated successfully',
             data: {
-                routes: savedRoutesData
+                routes: rankedRoutes
             }
         });
 
     } catch (error: any) {
         console.error('Explore Route Generation Error:', error);
-        res.status(500).json({ error: 'Internal Server Error during route generation' });
+        const isRoutingError = typeof error?.message === 'string' && error.message.includes('Routing service error:');
+        res.status(500).json({
+            error: isRoutingError
+                ? error.message
+                : 'ルート生成中に予期しないエラーが発生しました。時間をおいて再度お試しください。'
+        });
     }
 });
 
@@ -1389,6 +1575,8 @@ app.get('/api/explore/routes/:id', requireAuth, async (req: AuthRequest, res: Re
             orderBy: { order_index: 'asc' },
         });
 
+        const route_geometry = await getRouteGeometryFromWaypoints(waypoints);
+
         // Fetch cinematic spots
         const cinematic_spots = await prisma.cinematic_spots.findMany({
             where: { route_id: routeId },
@@ -1398,6 +1586,7 @@ app.get('/api/explore/routes/:id', requireAuth, async (req: AuthRequest, res: Re
             message: 'Route details fetched successfully',
             data: {
                 route,
+                route_geometry,
                 waypoints,
                 cinematic_spots,
             }
@@ -1408,8 +1597,8 @@ app.get('/api/explore/routes/:id', requireAuth, async (req: AuthRequest, res: Re
     }
 });
 
-// ===== Create: シネマティック動画生成（モック）API =====
-import { generateCinematicScript } from './src/services/aiCreateService';
+// ===== Create: シネマティック画像スタイル変換 API =====
+import { applyThemeToImage, getCreateThemePreset, isCreateThemeId } from './src/services/imageStyleService';
 
 app.post('/api/create/generate', requireAuth, upload.array('images', 10), async (req: AuthRequest, res: Response) => {
     try {
@@ -1425,15 +1614,28 @@ app.post('/api/create/generate', requireAuth, upload.array('images', 10), async 
             return res.status(400).json({ error: 'Theme and at least one image are required' });
         }
 
-        console.log(`[Create API] Generating script for ${userId}, theme: ${theme}, images: ${files.length}`);
+        if (!isCreateThemeId(theme)) {
+            return res.status(400).json({ error: 'Unsupported theme' });
+        }
 
-        // 1. Geminiでテーマに沿ったスクリプト（字幕）とカラーロジックを生成
-        const scriptResult = await generateCinematicScript(theme, files.length);
+        console.log(`[Create API] Applying image style for ${userId}, theme: ${theme}, images: ${files.length}`);
 
-        // 2. DB保存 (creations, cinematic_details)
-        // 本来はS3等に画像をアップロードしてURLを取得しますが、今回はMVPモックとしてスキップし
-        // 最初の画像を代表としてダミーURLを入れます（実際の画像表示はフロントエンドのローカルURL等で行う想定）
-        const mockMediaUrl = `mock_generated_video_${Date.now()}.mp4`;
+        const transformedImages = await Promise.all(
+            files.map(async (file, index) => {
+                const transformedBuffer = await applyThemeToImage(file.buffer, theme);
+                return {
+                    index,
+                    filename: file.originalname || `image-${index + 1}.jpg`,
+                    mime_type: 'image/jpeg',
+                    data_url: `data:image/jpeg;base64,${transformedBuffer.toString('base64')}`
+                };
+            })
+        );
+
+        const themePreset = getCreateThemePreset(theme);
+
+        // 代表値のみを DB に保存し、加工画像本体はレスポンスで返す。
+        const mockMediaUrl = `styled_images_${Date.now()}.json`;
 
         const creation = await prisma.$transaction(async (tx) => {
             const newCreation = await tx.creations.create({
@@ -1448,53 +1650,31 @@ app.post('/api/create/generate', requireAuth, upload.array('images', 10), async 
             await tx.cinematic_details.create({
                 data: {
                     creation_id: newCreation.id,
-                    color_logic_memo: scriptResult.color_logic_memo,
-                    // narration_script などのカラムがprismaに存在する場合はここに保存
-                    // schema上は narration_script String?等がある前提。無い場合は json カラムなどを利用するか適当に保存
-                    narration_script: JSON.stringify(scriptResult.script_lines)
+                    color_logic_memo: themePreset.colorLogicMemo,
+                    narration_script: null
                 }
             });
 
             return newCreation;
         });
 
-        console.log(`[Create API] Successfully generated for user: ${userId}, creation: ${creation.id}`);
+        console.log(`[Create API] Successfully styled images for user: ${userId}, creation: ${creation.id}`);
 
-        // 3. クライアントに結果を返す
         res.status(200).json({
-            message: 'Cinematic slideshow generated successfully',
+            message: 'Image style applied successfully',
             data: {
                 creation_id: creation.id,
                 theme: theme,
-                color_logic_memo: scriptResult.color_logic_memo,
-                script_lines: scriptResult.script_lines,
+                color_logic_memo: themePreset.colorLogicMemo,
+                processed_images: transformedImages,
             }
         });
 
     } catch (error: any) {
         console.error('Create Generation API Error:', error);
-        res.status(500).json({ error: 'Internal Server Error during cinematic generation' });
+        res.status(500).json({ error: 'Internal Server Error during image styling' });
     }
 });
-
-// Helper for distance calculation
-function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
-    var R = 6371; // Radius of the earth in km
-    var dLat = deg2rad(lat2 - lat1);  // deg2rad below
-    var dLon = deg2rad(lon2 - lon1);
-    var a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
-        Math.sin(dLon / 2) * Math.sin(dLon / 2)
-        ;
-    var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    var d = R * c; // Distance in km
-    return d;
-}
-
-function deg2rad(deg: number) {
-    return deg * (Math.PI / 180)
-}
 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🏍️ Ride backend running on http://0.0.0.0:${PORT}`);

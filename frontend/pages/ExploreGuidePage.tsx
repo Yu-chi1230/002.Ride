@@ -52,10 +52,22 @@ type WaypointData = {
     order_index: number;
 };
 
+type RouteGeometryPoint = {
+    latitude: number;
+    longitude: number;
+    order_index: number;
+};
+
 type CinematicSpotData = {
+    best_photo_time?: string | null;
     location_name: string | null;
     shooting_guide: string | null;
-    sun_angle_data: { altitude?: number; azimuth?: number } | null;
+    sun_angle_data: {
+        altitude?: number;
+        azimuth?: number;
+        best_photo_window_label?: string;
+        best_photo_window_reason?: string;
+    } | null;
     latitude: number | null;
     longitude: number | null;
 };
@@ -67,6 +79,7 @@ type DetailedRoute = {
         time_limit_minutes: number;
         total_distance_km: number | null;
     };
+    route_geometry?: RouteGeometryPoint[];
     waypoints: WaypointData[];
     cinematic_spots: CinematicSpotData[];
 };
@@ -144,12 +157,27 @@ export default function ExploreGuidePage() {
 
     // ===== UI Helpers =====
     const polylinePositions: [number, number][] =
-        routeData?.waypoints
+        (routeData?.route_geometry && routeData.route_geometry.length > 0
+            ? routeData.route_geometry
+            : routeData?.waypoints)
             ?.sort((a, b) => a.order_index - b.order_index)
             .map((wp) => [wp.latitude, wp.longitude]) ?? [];
 
     // Simple nearest spot calculation
     const nearestSpot = routeData?.cinematic_spots[0]; // For MVP, just show the first spot
+
+    const formatPhotoTime = (value: string | null | undefined) => {
+        if (!value) {
+            return null;
+        }
+
+        return new Intl.DateTimeFormat('ja-JP', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hourCycle: 'h23',
+            timeZone: 'Asia/Tokyo',
+        }).format(new Date(value));
+    };
 
     // Convert m/s to km/h
     const displaySpeed = currentPos.speed !== null ? Math.round(currentPos.speed * 3.6) : 0;
@@ -239,6 +267,14 @@ export default function ExploreGuidePage() {
                             <span className="hud-notification-distance">2.4 km</span>
                         </div>
                         <div className="hud-spot-name">{nearestSpot.location_name}</div>
+                        {(nearestSpot.sun_angle_data?.best_photo_window_label || nearestSpot.best_photo_time) && (
+                            <div className="hud-photo-window">
+                                撮りどき:
+                                {' '}
+                                {nearestSpot.sun_angle_data?.best_photo_window_label ?? formatPhotoTime(nearestSpot.best_photo_time)}
+                                {nearestSpot.sun_angle_data?.best_photo_window_reason && ` ${nearestSpot.sun_angle_data.best_photo_window_reason}`}
+                            </div>
+                        )}
                         <div className="hud-spot-guide">{nearestSpot.shooting_guide}</div>
 
                         {nearestSpot.sun_angle_data && (

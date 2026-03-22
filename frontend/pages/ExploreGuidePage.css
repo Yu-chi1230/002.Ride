@@ -135,6 +135,14 @@
     line-height: 1.4;
 }
 
+.hud-photo-window {
+    margin-top: 0.35rem;
+    font-size: 0.75rem;
+    color: #c8a050;
+    letter-spacing: 0.08em;
+    font-family: 'Inter', 'Roboto Mono', monospace;
+}
+
 .hud-sun-info {
     display: flex;
     align-items: center;

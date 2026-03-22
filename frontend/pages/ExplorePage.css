@@ -34,6 +34,115 @@
     background: #0D1117;
 }
 
+.sun-direction-hud {
+    position: absolute;
+    top: 4.8rem;
+    right: 1.2rem;
+    z-index: 900;
+    pointer-events: none;
+}
+
+.sun-direction-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    min-width: 176px;
+    padding: 0.75rem 0.85rem;
+    background: rgba(13, 17, 23, 0.72);
+    border: 1px solid rgba(212, 175, 55, 0.22);
+    backdrop-filter: blur(14px);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+    border-radius: 18px;
+}
+
+.sun-direction-dial {
+    position: relative;
+    width: 52px;
+    height: 52px;
+    flex: 0 0 52px;
+}
+
+.sun-direction-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 1px solid rgba(246, 231, 161, 0.18);
+    background:
+        radial-gradient(circle at center, rgba(246, 231, 161, 0.08) 0%, rgba(246, 231, 161, 0.02) 38%, transparent 39%),
+        conic-gradient(from 180deg, rgba(246, 231, 161, 0.16), rgba(246, 231, 161, 0.02) 22%, rgba(246, 231, 161, 0.14) 50%, rgba(246, 231, 161, 0.02) 74%, rgba(246, 231, 161, 0.16));
+    box-shadow: inset 0 0 18px rgba(246, 231, 161, 0.04);
+}
+
+.sun-direction-north {
+    position: absolute;
+    top: 4px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.5rem;
+    letter-spacing: 0.18em;
+    color: rgba(230, 237, 243, 0.68);
+    font-family: 'Inter', 'Roboto Mono', monospace;
+}
+
+.sun-direction-icon {
+    position: relative;
+    width: 52px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sun-core {
+    position: relative;
+    z-index: 2;
+    font-size: 1.05rem;
+    line-height: 1;
+    color: #f6e7a1;
+    text-shadow: 0 0 14px rgba(246, 231, 161, 0.5);
+}
+
+.sun-beam {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 2px;
+    height: 19px;
+    background: linear-gradient(to top, rgba(246, 231, 161, 0), rgba(246, 231, 161, 0.95));
+    transform: translate(-50%, -92%);
+    transform-origin: center bottom;
+    box-shadow: 0 0 14px rgba(246, 231, 161, 0.4);
+}
+
+.sun-direction-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+
+.sun-direction-label {
+    font-size: 0.58rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: #8B949E;
+    font-family: 'Inter', 'Roboto Mono', monospace;
+}
+
+.sun-direction-value {
+    font-size: 1.05rem;
+    color: #F6E7A1;
+    letter-spacing: 0.12em;
+    font-family: 'Roboto Mono', monospace;
+}
+
+.sun-direction-meta {
+    font-size: 0.62rem;
+    color: rgba(230, 237, 243, 0.78);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-family: 'Inter', 'Roboto Mono', monospace;
+}
+
 /* Dark map tiles overlay tint (Invert OSM standard tiles to dark mode) */
 .leaflet-tile-pane {
     filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
@@ -285,6 +394,34 @@
     gap: 0.5rem;
 }
 
+.reachable-area-summary {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin: 1rem 0 1.2rem;
+    padding: 0.9rem 1rem;
+    border: 1px solid rgba(212, 175, 55, 0.22);
+    background: linear-gradient(135deg, rgba(212, 175, 55, 0.12), rgba(13, 17, 23, 0.24));
+    backdrop-filter: blur(12px);
+}
+
+.reachable-area-summary-label {
+    font-size: 0.78rem;
+    letter-spacing: 0.14em;
+    color: #8B949E;
+    text-transform: uppercase;
+    font-family: 'Inter', 'Roboto Mono', monospace;
+    font-weight: 300;
+}
+
+.reachable-area-summary-value {
+    font-size: 1.2rem;
+    line-height: 1;
+    color: #F6E7A1;
+    font-family: 'Roboto Mono', monospace;
+    font-weight: 300;
+}
+
 .loading-spinner {
     width: 18px;
     height: 18px;
@@ -346,35 +483,6 @@
     color: #E6EDF3;
 }
 
-.result-stats {
-    display: flex;
-    gap: 1.2rem;
-    margin-bottom: 1.2rem;
-}
-
-.result-stat {
-    display: flex;
-    flex-direction: column;
-}
-
-.result-stat-value {
-    font-size: 1.6rem;
-    font-weight: 300;
-    color: #D4AF37;
-    line-height: 1.1;
-    font-family: 'Roboto Mono', monospace;
-}
-
-.result-stat-label {
-    font-size: 0.75rem;
-    letter-spacing: 0.1em;
-    color: #8B949E;
-    text-transform: uppercase;
-    margin-top: 0.2rem;
-    font-family: 'Inter', 'Roboto Mono', monospace;
-    font-weight: 300;
-}
-
 /* ===== Cinematic Spot Cards ===== */
 .spots-section {
     margin-top: 1rem;
@@ -418,6 +526,15 @@
     gap: 0.4rem;
 }
 
+.spot-best-time {
+    margin-bottom: 0.45rem;
+    font-size: 0.78rem;
+    color: #D4AF37;
+    letter-spacing: 0.08em;
+    font-family: 'Inter', 'Roboto Mono', monospace;
+    font-weight: 300;
+}
+
 .spot-name-icon {
     font-size: 0.8rem;
 }
@@ -426,17 +543,6 @@
     font-size: 0.85rem;
     color: #8B949E;
     line-height: 1.6;
-    font-weight: 300;
-}
-
-.spot-sun-info {
-    display: flex;
-    align-items: center;
-    gap: 0.3rem;
-    margin-top: 0.6rem;
-    font-size: 0.75rem;
-    color: #D4AF37;
-    font-family: 'Inter', 'Roboto Mono', monospace;
     font-weight: 300;
 }
 
@@ -639,21 +745,6 @@
     font-weight: 300;
 }
 
-.active-route-title-section {
-    margin-bottom: 1.5rem;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid #161B22;
-    /* より暗いボーダー */
-}
-
-.active-route-title {
-    font-size: 1.0rem;
-    font-weight: 300;
-    color: #E6EDF3;
-    line-height: 1.5;
-    letter-spacing: 0.05em;
-}
-
 /* --- Mobile / Responsive --- */
 @media (max-width: 768px) {
     .explore-header {
@@ -689,5 +780,13 @@
 
     .spot-card {
         padding: 1rem;
+    }
+
+    .reachable-area-summary {
+        padding: 0.85rem 0.9rem;
+    }
+
+    .reachable-area-summary-value {
+        font-size: 1rem;
     }
 }

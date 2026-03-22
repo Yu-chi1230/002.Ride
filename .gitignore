@@ -2,6 +2,7 @@
 docs/
 supabase/
 docker-compose.yml
+ride.sh
 
 # Node modules
 node_modules/

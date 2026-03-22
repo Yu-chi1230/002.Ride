@@ -2,6 +2,11 @@ import { supabase } from './supabase';
 
 const envApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8001';
 const isLocalhostUrl = envApiUrl.includes('localhost') || envApiUrl.includes('127.0.0.1');
+const DEFAULT_API_TIMEOUT_MS = 30000;
+
+type ApiFetchOptions = RequestInit & {
+    timeoutMs?: number;
+};
 
 // Convert localhost in VITE_API_URL to the current hostname for local network access
 export const API_BASE_URL = isLocalhostUrl
@@ -14,8 +19,10 @@ export const API_BASE_URL = isLocalhostUrl
  * @param options fetch のオプション
  * @returns fetch の Response オブジェクト
  */
-export async function apiFetch(endpoint: string, options: RequestInit = {}, tokenOverride?: string | null): Promise<Response> {
+export async function apiFetch(endpoint: string, options: ApiFetchOptions = {}, tokenOverride?: string | null): Promise<Response> {
     console.log(`[apiFetch] Starting request for endpoint: ${endpoint}`);
+
+    const { timeoutMs = DEFAULT_API_TIMEOUT_MS, ...requestOptions } = options;
 
     let token = tokenOverride;
 
@@ -52,14 +59,13 @@ export async function apiFetch(endpoint: string, options: RequestInit = {}, toke
     }
 
     const config: RequestInit = {
-        ...options,
+        ...requestOptions,
         headers,
     };
 
-    // Add a 30s timeout to avoid infinite hanging when the backend is unreachable
-    // (Increased from 10s to 30s as AI requests via Gemini can take 10-20 seconds)
+    // Timeout can be overridden per-request for endpoints that involve heavier AI/routing work.
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     config.signal = controller.signal;
 
     // URLの構築

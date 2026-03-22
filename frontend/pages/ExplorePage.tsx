@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Polyline, Marker, Popup, Polygon, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import BottomNav from '../components/BottomNav';
 import TouchSlider from '../components/TouchSlider';
@@ -44,10 +44,24 @@ type WaypointData = {
     order_index: number;
 };
 
+type RouteGeometryPoint = {
+    latitude: number;
+    longitude: number;
+    order_index: number;
+};
+
 type CinematicSpotData = {
+    best_photo_time?: string | null;
     location_name: string | null;
     shooting_guide: string | null;
-    sun_angle_data: { altitude?: number; azimuth?: number } | null;
+    sun_angle_data: {
+        altitude?: number;
+        azimuth?: number;
+        light_phase?: string;
+        best_photo_window_label?: string;
+        best_photo_window_reason?: string;
+        preferred_light_direction?: 'front_light' | 'back_light' | 'side_light';
+    } | null;
     latitude: number | null;
     longitude: number | null;
 };
@@ -59,6 +73,7 @@ type RouteResult = {
         time_limit_minutes: number;
         total_distance_km: number | null;
     };
+    route_geometry?: RouteGeometryPoint[];
     waypoints: WaypointData[];
     cinematic_spots: CinematicSpotData[];
 };
@@ -78,6 +93,66 @@ const TIME_PRESETS = [
     { label: '05:00', value: 300 },
 ];
 
+const REACHABLE_AREA_AVERAGE_SPEED_KMH = 32;
+const REACHABLE_AREA_RETURN_MARGIN = 0.62;
+const REACHABLE_AREA_POINT_COUNT = 36;
+const EXPLORE_ROUTE_TIMEOUT_MS = 60000;
+
+const buildReachableAreaPolygon = (center: { lat: number; lng: number }, minutes: number): [number, number][] => {
+    const reachableDistanceKm =
+        (minutes / 60) * REACHABLE_AREA_AVERAGE_SPEED_KMH * REACHABLE_AREA_RETURN_MARGIN;
+    const latRadius = reachableDistanceKm / 111;
+    const lngRadius = reachableDistanceKm / (111 * Math.max(Math.cos((center.lat * Math.PI) / 180), 0.2));
+
+    return Array.from({ length: REACHABLE_AREA_POINT_COUNT }, (_, index) => {
+        const theta = (Math.PI * 2 * index) / REACHABLE_AREA_POINT_COUNT;
+        const eastBias = Math.max(0, Math.cos(theta));
+        const northBias = Math.max(0, Math.sin(theta));
+        const ripple = 1 + (Math.sin(theta * 3) * 0.08) + (Math.cos(theta * 2) * 0.05);
+        const radiusScale = ripple * (1 + eastBias * 0.18 + northBias * 0.08);
+
+        return [
+            center.lat + Math.sin(theta) * latRadius * radiusScale,
+            center.lng + Math.cos(theta) * lngRadius * radiusScale,
+        ];
+    });
+};
+
+const formatPhotoTime = (value: string | null | undefined) => {
+    if (!value) {
+        return null;
+    }
+
+    return new Intl.DateTimeFormat('ja-JP', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+        timeZone: 'Asia/Tokyo',
+    }).format(new Date(value));
+};
+
+const getCompassLabel = (azimuth: number) => {
+    const directions = ['北', '北東', '東', '南東', '南', '南西', '西', '北西'];
+    return directions[Math.round((((azimuth % 360) + 360) % 360) / 45) % directions.length];
+};
+
+const getLightPhaseLabel = (phase: string | null | undefined) => {
+    switch (phase) {
+        case 'hard_daylight':
+            return '硬い日中光';
+        case 'daylight':
+            return '日中の自然光';
+        case 'low_angle_light':
+            return '低い斜光';
+        case 'blue_hour':
+            return 'ブルーアワー';
+        case 'night':
+            return '夜間光';
+        default:
+            return '現在の光';
+    }
+};
+
 // ===== メインコンポーネント =====
 function ExplorePage() {
     const navigate = useNavigate();
@@ -96,6 +171,7 @@ function ExplorePage() {
     useEffect(() => {
         if (location.state && location.state.predefinedRoute) {
             const preRoute = location.state.predefinedRoute;
+            setTimeLimit(preRoute.time_limit_minutes);
             // Expected format map, handles any slight differences
             const formattedResult: RouteResult = {
                 route: {
@@ -104,6 +180,7 @@ function ExplorePage() {
                     time_limit_minutes: preRoute.time_limit_minutes,
                     total_distance_km: preRoute.total_distance_km,
                 },
+                route_geometry: preRoute.route_geometry || [],
                 waypoints: preRoute.waypoints || [],
                 cinematic_spots: preRoute.cinematic_spots || [],
             };
@@ -155,17 +232,18 @@ function ExplorePage() {
     // }, [timeLimit, userLocation, routeResults]);
 
     // ===== ルート検索 =====
-    const handleSearch = async () => {
+    const handleSearch = async (nextTimeLimit = timeLimit) => {
         if (!userLocation) return;
         setIsSearching(true);
         try {
             const res = await apiFetch('/api/explore/routes', {
                 method: 'POST',
                 body: JSON.stringify({
-                    time_limit_minutes: timeLimit,
+                    time_limit_minutes: nextTimeLimit,
                     latitude: userLocation.lat,
                     longitude: userLocation.lng,
                 }),
+                timeoutMs: EXPLORE_ROUTE_TIMEOUT_MS,
             });
             if (res.ok) {
                 const json = await res.json();
@@ -184,9 +262,16 @@ function ExplorePage() {
 
     // ===== ルートのポリライン座標 =====
     const polylinePositions: [number, number][] =
-        activeRouteResult?.waypoints
+        (activeRouteResult?.route_geometry && activeRouteResult.route_geometry.length > 0
+            ? activeRouteResult.route_geometry
+            : activeRouteResult?.waypoints)
             ?.sort((a, b) => a.order_index - b.order_index)
             .map((wp) => [wp.latitude, wp.longitude]) ?? [];
+
+    const reachableAreaPositions = userLocation
+        ? buildReachableAreaPolygon(userLocation, timeLimit)
+        : [];
+    const leadSpotSun = activeRouteResult?.cinematic_spots.find((spot) => spot.sun_angle_data?.azimuth !== undefined)?.sun_angle_data ?? null;
 
 
 
@@ -203,6 +288,19 @@ function ExplorePage() {
         setRouteResults(null);
         setSelectedRouteIndex(0);
         setIsPredefinedRoute(false);
+    };
+
+    const handleTimeCommit = (nextTimeLimit: number) => {
+        if (routeResults && !isSearching) {
+            void handleSearch(nextTimeLimit);
+        }
+    };
+
+    const handlePresetSelect = (nextTimeLimit: number) => {
+        setTimeLimit(nextTimeLimit);
+        if (routeResults && !isSearching) {
+            void handleSearch(nextTimeLimit);
+        }
     };
 
     return (
@@ -222,6 +320,30 @@ function ExplorePage() {
                             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                         />
                         <RecenterMap lat={userLocation.lat} lng={userLocation.lng} />
+
+                        {reachableAreaPositions.length > 0 && (
+                            <>
+                                <Polygon
+                                    positions={reachableAreaPositions}
+                                    pathOptions={{
+                                        color: '#D4AF37',
+                                        weight: 2,
+                                        opacity: 0.8,
+                                        fillColor: '#D4AF37',
+                                        fillOpacity: 0.12,
+                                    }}
+                                />
+                                <Polygon
+                                    positions={reachableAreaPositions}
+                                    pathOptions={{
+                                        color: '#F6E7A1',
+                                        weight: 8,
+                                        opacity: 0.08,
+                                        fillOpacity: 0,
+                                    }}
+                                />
+                            </>
+                        )}
 
                         {/* ルートのポリライン */}
                         {activeRouteResult && polylinePositions.length > 0 && (
@@ -253,6 +375,35 @@ function ExplorePage() {
                                 </Marker>
                             ))}
                     </MapContainer>
+                </div>
+            )}
+
+            {leadSpotSun?.azimuth !== undefined && (
+                <div className="sun-direction-hud">
+                    <div className="sun-direction-badge">
+                        <div
+                            className="sun-direction-dial"
+                            aria-label={`太陽方位 ${Math.round(leadSpotSun.azimuth)} 度`}
+                        >
+                            <div className="sun-direction-ring" />
+                            <div className="sun-direction-north">N</div>
+                            <div
+                                className="sun-direction-icon"
+                                style={{ transform: `rotate(${leadSpotSun.azimuth}deg)` }}
+                                aria-hidden="true"
+                            >
+                                <span className="sun-core">☀</span>
+                                <span className="sun-beam" />
+                            </div>
+                        </div>
+                        <div className="sun-direction-copy">
+                            <div className="sun-direction-label">LIGHT VECTOR</div>
+                            <div className="sun-direction-value">{getCompassLabel(leadSpotSun.azimuth)}</div>
+                            <div className="sun-direction-meta">
+                                {getLightPhaseLabel(leadSpotSun.light_phase)}
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
 
@@ -294,7 +445,7 @@ function ExplorePage() {
                 <div className="explore-panel">
                     {/* タイムセレクター */}
                     <div className="time-selector">
-                        <div className="time-selector-label">所用時間</div>
+                        <div className="time-selector-label">所要時間</div>
                         <div className="time-display">
                             <span className="time-value">{timeDisplay.value}</span>
                             <span className="time-unit">{timeDisplay.unit}</span>
@@ -305,13 +456,14 @@ function ExplorePage() {
                             step={30}
                             value={timeLimit}
                             onChange={(val) => setTimeLimit(val)}
+                            onChangeEnd={handleTimeCommit}
                         />
                         <div className="time-presets">
                             {TIME_PRESETS.map((p) => (
                                 <span
                                     key={p.value}
                                     className={`time-preset-label ${timeLimit === p.value ? 'active' : ''}`}
-                                    onClick={() => setTimeLimit(p.value)}
+                                    onClick={() => handlePresetSelect(p.value)}
                                 >
                                     {p.label}
                                 </span>
@@ -319,10 +471,17 @@ function ExplorePage() {
                         </div>
                     </div>
 
+                    <div className="reachable-area-summary">
+                        <span className="reachable-area-summary-label">到達可能範囲</span>
+                        <span className="reachable-area-summary-value">
+                            約{Math.round((timeLimit / 60) * REACHABLE_AREA_AVERAGE_SPEED_KMH * REACHABLE_AREA_RETURN_MARGIN)}km
+                        </span>
+                    </div>
+
                     {/* 検索ボタン */}
                     <button
                         className="search-route-btn"
-                        onClick={handleSearch}
+                        onClick={() => void handleSearch()}
                         disabled={isSearching || !userLocation}
                     >
                         {isSearching ? (
@@ -373,20 +532,6 @@ function ExplorePage() {
                         <h3 className="active-route-title">{activeRouteResult.route.title}</h3>
                     </div>
 
-                    <div className="result-stats">
-                        <div className="result-stat">
-                            <span className="result-stat-value">
-                                {activeRouteResult.route.total_distance_km?.toFixed(1) ?? '--'}
-                            </span>
-                            <span className="result-stat-label">km</span>
-                        </div>
-                        <div className="result-stat">
-                            <span className="result-stat-value">
-                                {formatTime(activeRouteResult.route.time_limit_minutes).value}
-                            </span>
-                        </div>
-                    </div>
-
                     {/* 撮影スポット */}
                     {activeRouteResult.cinematic_spots.length > 0 && (
                         <div className="spots-section">
@@ -397,14 +542,16 @@ function ExplorePage() {
                                         <span className="spot-name-icon"></span>
                                         {spot.location_name ?? `スポット ${idx + 1}`}
                                     </div>
+                                    {(spot.sun_angle_data?.best_photo_window_label || spot.best_photo_time) && (
+                                        <div className="spot-best-time">
+                                            おすすめ撮影:
+                                            {' '}
+                                            {spot.sun_angle_data?.best_photo_window_label ?? formatPhotoTime(spot.best_photo_time)}
+                                            {spot.sun_angle_data?.best_photo_window_reason && ` ${spot.sun_angle_data.best_photo_window_reason}`}
+                                        </div>
+                                    )}
                                     {spot.shooting_guide && (
                                         <div className="spot-guide">{spot.shooting_guide}</div>
-                                    )}
-                                    {spot.sun_angle_data && (
-                                        <div className="spot-sun-info">
-                                            SUN_ALT {spot.sun_angle_data.altitude}°
-                                            {spot.sun_angle_data.azimuth && ` / AZIMUTH ${spot.sun_angle_data.azimuth}°`}
-                                        </div>
                                     )}
                                 </div>
                             ))}
