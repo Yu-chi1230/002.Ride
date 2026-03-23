@@ -53,6 +53,24 @@ export const isCreateThemeId = (value: string): value is CreateThemeId => value 
 export const getCreateThemePreset = (theme: CreateThemeId) => THEME_PRESETS[theme];
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+const scaleAroundOne = (value: number, multiplier: number) => 1 + (value - 1) * multiplier;
+const scaleAroundZero = (value: number, multiplier: number) => value * multiplier;
+
+const getIntensityMultiplier = (intensity: number) => {
+    const value = clamp(intensity, 0, 100);
+
+    if (value === 50) {
+        return 1;
+    }
+
+    if (value > 50) {
+        // 50 -> 1.0, 100 -> 1.8
+        return 1 + ((value - 50) / 50) * 0.8;
+    }
+
+    // 50 -> 1.0, 0 -> 0.5
+    return 1 - ((50 - value) / 50) * 0.5;
+};
 
 async function normalizeImage(buffer: Buffer): Promise<Buffer> {
     const normalizedPipeline = sharp(buffer).rotate().removeAlpha();
@@ -81,17 +99,33 @@ async function normalizeImage(buffer: Buffer): Promise<Buffer> {
         .toBuffer();
 }
 
-export async function applyThemeToImage(buffer: Buffer, theme: CreateThemeId): Promise<Buffer> {
+export async function applyThemeToImage(
+    buffer: Buffer,
+    theme: CreateThemeId,
+    intensity: number = 50
+): Promise<Buffer> {
     const preset = THEME_PRESETS[theme];
     const normalizedBuffer = await normalizeImage(buffer);
+    const clampedIntensity = clamp(intensity, 0, 100);
+    const multiplier = getIntensityMultiplier(clampedIntensity);
     let pipeline = sharp(normalizedBuffer).rotate();
 
     if (preset.modulate) {
-        pipeline = pipeline.modulate(preset.modulate);
+        pipeline = pipeline.modulate({
+            brightness: preset.modulate.brightness !== undefined
+                ? scaleAroundOne(preset.modulate.brightness, multiplier)
+                : undefined,
+            saturation: preset.modulate.saturation !== undefined
+                ? scaleAroundOne(preset.modulate.saturation, multiplier)
+                : undefined
+        });
     }
 
     if (preset.linear) {
-        pipeline = pipeline.linear(preset.linear.a ?? 1, preset.linear.b ?? 0);
+        pipeline = pipeline.linear(
+            preset.linear.a !== undefined ? scaleAroundOne(preset.linear.a, multiplier) : 1,
+            preset.linear.b !== undefined ? scaleAroundZero(preset.linear.b, multiplier) : 0
+        );
     }
 
     if (preset.tint) {
@@ -102,5 +136,23 @@ export async function applyThemeToImage(buffer: Buffer, theme: CreateThemeId): P
         pipeline = pipeline.sharpen();
     }
 
-    return pipeline.jpeg({ quality: 92 }).toBuffer();
+    const styledBuffer = await pipeline.jpeg({ quality: 92 }).toBuffer();
+
+    // Blend styled result with normalized original across the whole range.
+    // 0 -> original only, 50 -> half, 100 -> styled only.
+    if (clampedIntensity < 100) {
+        const blendAlpha = clampedIntensity / 100;
+        const overlayBuffer = await sharp(styledBuffer)
+            .ensureAlpha(blendAlpha)
+            .png()
+            .toBuffer();
+
+        return sharp(normalizedBuffer)
+            .ensureAlpha()
+            .composite([{ input: overlayBuffer, blend: 'over' }])
+            .jpeg({ quality: 92 })
+            .toBuffer();
+    }
+
+    return styledBuffer;
 }

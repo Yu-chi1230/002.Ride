@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ImagePlus } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
 import { apiFetch } from '../src/lib/api';
@@ -42,81 +42,55 @@ type ProcessedImageResponse = {
     data_url: string;
 };
 
+const getLivePreviewFilter = (themeId: ThemeId, intensity: number) => {
+    const t = Math.max(0, Math.min(100, intensity)) / 100;
+    switch (themeId) {
+        case 'cyberpunk':
+            return `saturate(${1 + t * 0.8}) contrast(${1 + t * 0.45}) hue-rotate(${t * 18}deg)`;
+        case 'vintage':
+            return `saturate(${1 - t * 0.35}) sepia(${t * 0.35}) contrast(${1 + t * 0.12})`;
+        case 'action':
+            return `contrast(${1 + t * 0.6}) saturate(${1 - t * 0.2}) brightness(${1 - t * 0.1})`;
+        case 'romantic':
+            return `brightness(${1 + t * 0.18}) saturate(${1 - t * 0.12}) sepia(${t * 0.2})`;
+        default:
+            return 'none';
+    }
+};
+
 function CreatePage() {
-    const [images, setImages] = useState<CreateImageItem[]>([]);
-    const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+    const [image, setImage] = useState<CreateImageItem | null>(null);
     const [selectedThemeId, setSelectedThemeId] = useState<ThemeId>(THEMES[0].id);
+    const [intensityValue, setIntensityValue] = useState(50);
     const [sliderValue, setSliderValue] = useState(50);
-    const [isGenerating, setIsGenerating] = useState(false);
-    const [colorLogicMemo, setColorLogicMemo] = useState<string | null>(null);
+    const [isIntensitySliding, setIsIntensitySliding] = useState(false);
 
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const replaceInputRef = useRef<HTMLInputElement>(null);
-
-    const currentImage = images[selectedImageIndex] ?? null;
-    const currentImageUrl = currentImage?.previewUrl ?? null;
-    const currentProcessedUrl = currentImage?.processedUrl ?? null;
-
-    const hasProcessedImages = useMemo(
-        () => images.some((image) => image.processedUrl !== null),
-        [images]
-    );
-
-    const appendFiles = (files: File[]) => {
-        const nextItems = files.map((file) => ({
-            file,
-            previewUrl: URL.createObjectURL(file),
-            processedUrl: null
-        }));
-
-        setImages((prev) => {
-            const next = [...prev, ...nextItems];
-            if (prev.length === 0 && next.length > 0) {
-                setSelectedImageIndex(0);
-            }
-            return next;
-        });
-        setSliderValue(50);
-        setColorLogicMemo(null);
-    };
+    const scheduleTimerRef = useRef<number | null>(null);
+    const latestGenerateRequestRef = useRef(0);
+    const activeAbortRef = useRef<AbortController | null>(null);
+    const currentImageUrl = image?.previewUrl ?? null;
+    const currentProcessedUrl = image?.processedUrl ?? null;
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
-            appendFiles(Array.from(e.target.files));
-        }
-        e.target.value = '';
-    };
-
-    const handleReplaceSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files.length > 0) {
             const file = e.target.files[0];
-            const nextItem: CreateImageItem = {
+            setImage({
                 file,
                 previewUrl: URL.createObjectURL(file),
                 processedUrl: null
-            };
-
-            setImages((prev) => prev.map((item, index) => (
-                index === selectedImageIndex ? nextItem : item
-            )));
+            });
+            setSelectedThemeId('cyberpunk');
+            setIntensityValue(50);
             setSliderValue(50);
-            setColorLogicMemo(null);
+            if (scheduleTimerRef.current !== null) {
+                window.clearTimeout(scheduleTimerRef.current);
+            }
+            scheduleTimerRef.current = window.setTimeout(() => {
+                void generateImage({ themeId: 'cyberpunk', intensity: 50, auto: true, fileOverride: file });
+            }, 150);
         }
         e.target.value = '';
-    };
-
-    const handleRemoveImage = () => {
-        setImages((prev) => {
-            const next = prev.filter((_, index) => index !== selectedImageIndex);
-            if (next.length === 0) {
-                setSelectedImageIndex(0);
-            } else if (selectedImageIndex >= next.length) {
-                setSelectedImageIndex(next.length - 1);
-            }
-            return next;
-        });
-        setSliderValue(50);
-        setColorLogicMemo(null);
     };
 
     const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -126,30 +100,34 @@ function CreatePage() {
     const handleThemeChange = (themeId: ThemeId) => {
         setSelectedThemeId(themeId);
         setSliderValue(50);
-        if (!hasProcessedImages) {
-            setColorLogicMemo(null);
-        }
     };
 
-    const handleGenerate = async () => {
-        if (images.length === 0 || isGenerating) {
+    const generateImage = async (params: { themeId: ThemeId; intensity: number; auto: boolean; fileOverride?: File }) => {
+        const sourceFile = params.fileOverride ?? image?.file;
+        if (!sourceFile) {
             return;
         }
 
-        setIsGenerating(true);
-        setColorLogicMemo(null);
+        if (activeAbortRef.current) {
+            activeAbortRef.current.abort();
+        }
+        const controller = new AbortController();
+        activeAbortRef.current = controller;
+
+        const requestId = ++latestGenerateRequestRef.current;
+        const targetFile = sourceFile;
 
         try {
             const formData = new FormData();
-            formData.append('theme', selectedThemeId);
-            images.forEach((image) => {
-                formData.append('images', image.file);
-            });
+            formData.append('theme', params.themeId);
+            formData.append('intensity', String(params.intensity));
+            formData.append('images', targetFile);
 
             const response = await apiFetch('/api/create/generate', {
                 method: 'POST',
                 body: formData,
-                timeoutMs: 60000
+                timeoutMs: 60000,
+                signal: controller.signal
             });
 
             const data = await response.json().catch(() => null);
@@ -162,21 +140,60 @@ function CreatePage() {
                 ? data.data.processed_images as ProcessedImageResponse[]
                 : [];
 
-            setImages((prev) => prev.map((item, index) => {
-                const processed = processedImages.find((entry) => entry.index === index);
-                return {
-                    ...item,
-                    processedUrl: processed?.data_url ?? null
-                };
-            }));
-            setColorLogicMemo(data?.data?.color_logic_memo ?? null);
+            const processed = processedImages.find((entry) => entry.index === 0);
+            if (requestId === latestGenerateRequestRef.current) {
+            setImage((prev) => {
+                if (!prev) return prev;
+                if (params.fileOverride) {
+                    return { ...prev, processedUrl: processed?.data_url ?? null };
+                }
+                return prev.file === targetFile
+                    ? { ...prev, processedUrl: processed?.data_url ?? null }
+                    : prev;
+            });
+            }
         } catch (error: any) {
+            if (error?.name === 'AbortError') {
+                return;
+            }
             console.error('Create generate error:', error);
-            alert(error?.message || '画像変換に失敗しました。');
+            if (params.auto) {
+                // Auto mode errors are intentionally not surfaced in UI.
+            } else {
+                alert(error?.message || '画像変換に失敗しました。');
+            }
         } finally {
-            setIsGenerating(false);
+            if (requestId === latestGenerateRequestRef.current) {
+            }
         }
     };
+
+    const scheduleSharpGenerate = (delayMs = 180, overrides?: { themeId?: ThemeId; intensity?: number }) => {
+        if (!image) {
+            return;
+        }
+        if (scheduleTimerRef.current !== null) {
+            window.clearTimeout(scheduleTimerRef.current);
+        }
+        scheduleTimerRef.current = window.setTimeout(() => {
+            void generateImage({
+                themeId: overrides?.themeId ?? selectedThemeId,
+                intensity: overrides?.intensity ?? intensityValue,
+                auto: true
+            });
+        }, delayMs);
+    };
+
+    useEffect(() => {
+        return () => {
+            if (scheduleTimerRef.current !== null) {
+                window.clearTimeout(scheduleTimerRef.current);
+            }
+            if (activeAbortRef.current) {
+                activeAbortRef.current.abort();
+            }
+        };
+    }, []);
 
     const handleDownload = () => {
         if (!currentImageUrl) {
@@ -195,20 +212,20 @@ function CreatePage() {
     return (
         <div className="create-page">
             <header className="create-header">
-                {images.length > 0 && (
+                {image && (
                     <div className="badge-before" style={{ position: 'relative', bottom: 0, left: 0, opacity: sliderValue > 20 ? 1 : 0 }}>BEFORE</div>
                 )}
 
                 <h1 className="create-title">Create Editor</h1>
 
-                {images.length > 0 && (
+                {image && (
                     <div className="badge-after" style={{ position: 'relative', bottom: 0, right: 0, opacity: sliderValue < 80 ? 1 : 0 }}>AFTER</div>
                 )}
             </header>
 
             <div className="editor-container">
                 <div className="viewport-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {images.length === 0 ? (
+                    {!image ? (
                         <div
                             className="upload-box"
                             onClick={() => fileInputRef.current?.click()}
@@ -240,6 +257,7 @@ function CreatePage() {
                                     className="img-after"
                                     style={{
                                         clipPath: `inset(0 0 0 ${sliderValue}%)`,
+                                        filter: isIntensitySliding ? getLivePreviewFilter(selectedThemeId, intensityValue) : 'none',
                                     }}
                                 />
                             )}
@@ -264,71 +282,6 @@ function CreatePage() {
                     )}
                 </div>
 
-                {images.length > 0 && (
-                    <div className="toolbar-section">
-                        <div className="section-label">SELECTED PICTURES</div>
-                        <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                            <div className="image-selector" style={{ margin: 0, paddingLeft: '1.2rem', paddingRight: '0.4rem', flex: 1, minWidth: 0 }}>
-                                {images.map((image, idx) => (
-                                    <img
-                                        key={`${image.previewUrl}-${idx}`}
-                                        src={image.processedUrl ?? image.previewUrl}
-                                        alt={`thumb ${idx}`}
-                                        className={`thumb-item ${selectedImageIndex === idx ? 'active' : ''}`}
-                                        onClick={() => {
-                                            setSelectedImageIndex(idx);
-                                            setSliderValue(50);
-                                        }}
-                                    />
-                                ))}
-                                <div
-                                    className="thumb-item"
-                                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: '1px solid rgba(212, 175, 55, 0.3)', color: '#D4AF37', fontSize: '1.2rem', opacity: 1, fontWeight: 300, flexShrink: 0 }}
-                                    onClick={() => fileInputRef.current?.click()}
-                                >
-                                    +
-                                </div>
-                            </div>
-                            <div className="current-image-actions" style={{
-                                flexShrink: 0,
-                                margin: 0,
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'stretch',
-                                justifyContent: 'space-between',
-                                height: '60px',
-                                gap: '0.4rem',
-                                paddingLeft: '0.8rem'
-                            }}>
-                                <span className="action-text-btn" onClick={() => replaceInputRef.current?.click()} style={{
-                                    flex: 1,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    padding: '0 0.8rem',
-                                    borderRadius: '2px',
-                                    fontSize: '0.7rem'
-                                }}>
-                                    CHANGE
-                                </span>
-                                <span className="action-text-btn action-danger" onClick={handleRemoveImage} style={{
-                                    flex: 1,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    padding: '0 0.8rem',
-                                    borderRadius: '2px',
-                                    fontSize: '0.7rem',
-                                    backgroundColor: 'rgba(229, 83, 75, 0.1)',
-                                    color: '#E5534B'
-                                }}>
-                                    REMOVE
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
                 <div className="toolbar-section">
                     <div className="section-label">COLOR GRADING PRESETS</div>
                     <div className="theme-scroller">
@@ -337,7 +290,10 @@ function CreatePage() {
                                 key={theme.id}
                                 className={`theme-card ${selectedThemeId === theme.id ? 'active' : ''}`}
                                 style={{ backgroundImage: `url(${theme.img})` }}
-                                onClick={() => handleThemeChange(theme.id)}
+                                onClick={() => {
+                                    handleThemeChange(theme.id);
+                                    scheduleSharpGenerate(180, { themeId: theme.id });
+                                }}
                             >
                                 <div className="theme-card-overlay" />
                                 <div className="theme-card-title">{theme.name}</div>
@@ -346,35 +302,60 @@ function CreatePage() {
                     </div>
                 </div>
 
-                {colorLogicMemo && (
-                    <div className="toolbar-section" style={{ paddingTop: '0.4rem' }}>
-                        <div className="section-label">STYLE NOTE</div>
-                        <div style={{
-                            margin: '0 1.2rem 1rem',
-                            padding: '0.9rem 1rem',
-                            border: '1px solid rgba(212, 175, 55, 0.22)',
-                            background: 'rgba(22, 27, 34, 0.75)',
-                            color: '#E6EDF3',
-                            lineHeight: 1.7,
-                            fontSize: '0.88rem'
-                        }}>
-                            {colorLogicMemo}
+                <div className="toolbar-section">
+                    <div className="section-label">STRENGTH</div>
+                    <div style={{ margin: '0 1.2rem 1rem', padding: '0.6rem 0.8rem', border: '1px solid rgba(212, 175, 55, 0.22)', background: 'rgba(22, 27, 34, 0.75)' }}>
+                        <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            step="1"
+                            value={intensityValue}
+                            onChange={(e) => setIntensityValue(Number(e.target.value))}
+                            onPointerDown={() => {
+                                setIsIntensitySliding(true);
+                            }}
+                            onPointerUp={() => {
+                                setIsIntensitySliding(false);
+                                scheduleSharpGenerate(120);
+                            }}
+                            onTouchStart={() => {
+                                setIsIntensitySliding(true);
+                            }}
+                            onTouchEnd={() => {
+                                setIsIntensitySliding(false);
+                                scheduleSharpGenerate(120);
+                            }}
+                            onMouseDown={() => {
+                                setIsIntensitySliding(true);
+                            }}
+                            onMouseUp={() => {
+                                setIsIntensitySliding(false);
+                                scheduleSharpGenerate(120);
+                            }}
+                            onBlur={() => {
+                                setIsIntensitySliding(false);
+                                scheduleSharpGenerate(120);
+                            }}
+                            style={{ width: '100%' }}
+                        />
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.45rem', fontSize: '0.74rem', color: '#8B949E' }}>
+                            <span>弱め</span>
+                            <span>標準</span>
+                            <span>強め</span>
+                        </div>
+                        <div style={{ marginTop: '0.35rem', textAlign: 'right', fontSize: '0.78rem', color: '#E6EDF3' }}>
+                            現在値: {intensityValue}
                         </div>
                     </div>
-                )}
+                </div>
 
                 <div className="action-buttons">
                     <button
                         className="btn-primary"
-                        onClick={handleGenerate}
-                        disabled={isGenerating || images.length === 0}
-                    >
-                        {isGenerating ? '変換中...' : 'カラー変換を適用'}
-                    </button>
-                    <button
-                        className="btn-secondary"
+                        style={{ width: '100%', marginTop: '0.5rem' }}
                         onClick={handleDownload}
-                        disabled={images.length === 0}
+                        disabled={!image}
                     >
                         画像を保存する
                     </button>
@@ -383,19 +364,10 @@ function CreatePage() {
 
             <input
                 type="file"
-                multiple
                 accept="image/*"
                 ref={fileInputRef}
                 className="hidden-file-input"
                 onChange={handleFileSelect}
-            />
-
-            <input
-                type="file"
-                accept="image/*"
-                ref={replaceInputRef}
-                className="hidden-file-input"
-                onChange={handleReplaceSelect}
             />
 
             <BottomNav />

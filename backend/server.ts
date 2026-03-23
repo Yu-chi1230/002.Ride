@@ -1608,6 +1608,7 @@ app.post('/api/create/generate', requireAuth, upload.array('images', 10), async 
 
         const userId = req.user.id;
         const theme = req.body.theme as string;
+        const intensityInput = (req.body.intensity as string | undefined) ?? '50';
         const files = req.files as Express.Multer.File[];
 
         if (!theme || !files || files.length === 0) {
@@ -1618,11 +1619,24 @@ app.post('/api/create/generate', requireAuth, upload.array('images', 10), async 
             return res.status(400).json({ error: 'Unsupported theme' });
         }
 
-        console.log(`[Create API] Applying image style for ${userId}, theme: ${theme}, images: ${files.length}`);
+        let intensity: number;
+        if (intensityInput === 'normal') {
+            intensity = 50;
+        } else if (intensityInput === 'strong') {
+            intensity = 100;
+        } else {
+            intensity = Number(intensityInput);
+        }
+
+        if (!Number.isFinite(intensity) || intensity < 0 || intensity > 100) {
+            return res.status(400).json({ error: 'Intensity must be between 0 and 100' });
+        }
+
+        console.log(`[Create API] Applying image style for ${userId}, theme: ${theme}, intensity: ${intensity}, images: ${files.length}`);
 
         const transformedImages = await Promise.all(
             files.map(async (file, index) => {
-                const transformedBuffer = await applyThemeToImage(file.buffer, theme);
+                const transformedBuffer = await applyThemeToImage(file.buffer, theme, intensity);
                 return {
                     index,
                     filename: file.originalname || `image-${index + 1}.jpg`,
@@ -1665,6 +1679,7 @@ app.post('/api/create/generate', requireAuth, upload.array('images', 10), async 
             data: {
                 creation_id: creation.id,
                 theme: theme,
+                intensity,
                 color_logic_memo: themePreset.colorLogicMemo,
                 processed_images: transformedImages,
             }

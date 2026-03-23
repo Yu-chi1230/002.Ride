@@ -484,45 +484,34 @@
 
 /* Actions */
 .action-buttons {
-    display: flex;
-    gap: 1rem;
     padding: 0 1.2rem;
     margin-bottom: 2rem;
     flex-shrink: 0;
 }
 
-.create-page .btn-primary,
-.create-page .btn-secondary {
-    flex: 1;
-    padding: 1rem;
-    border-radius: 4px;
-    /* 極小の角丸 */
-    font-size: 0.95rem;
-    font-weight: 300;
-    letter-spacing: 0.1em;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-}
-
 .create-page .btn-primary {
-    background: transparent;
-    color: #D4AF37;
-    border: 1px solid #D4AF37;
+    width: 100%;
+    background-color: #238636;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    padding: 0.8rem 1.2rem;
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: normal;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    text-align: center;
 }
 
 .create-page .btn-primary:hover {
-    background: #D4AF37;
-    color: #0D1117;
-    box-shadow: 0 10px 30px rgba(212, 175, 55, 0.2);
-    transform: translateY(-1px);
+    background-color: #2ea043;
 }
 
-.create-page .btn-primary:active {
-    transform: translateY(1px);
+.create-page .btn-primary:disabled {
+    background-color: #1e5c27;
+    cursor: not-allowed;
+    color: rgba(255, 255, 255, 0.6);
 }
 
 .btn-secondary {
@@ -568,8 +557,7 @@
         padding: 0 1rem;
     }
 
-    .create-page .btn-primary,
-    .create-page .btn-secondary {
-        padding: 14px 20px;
+    .create-page .btn-primary {
+        padding: 0.8rem 1.2rem;
     }
 }
