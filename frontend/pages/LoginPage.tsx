@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../src/lib/supabase';
+import { apiFetch } from '../src/lib/api';
 import './LoginPage.css';
 
 const GoogleIcon = () => (
@@ -57,23 +58,47 @@ function LoginPage() {
 
         setIsLoading(true);
         try {
-            const { data, error } = await supabase.auth.signInWithPassword({
-                email: email.trim(),
-                password: password.trim(),
-            });
+            const response = await apiFetch('/api/auth/login', {
+                method: 'POST',
+                body: JSON.stringify({
+                    email: email.trim(),
+                    password: password.trim(),
+                }),
+            }, null);
 
-            if (error) {
-                // Supabase returns specific error messages that might signify wrong password or user not found
+            const result = await response.json();
+
+            if (response.status === 429) {
+                const retryAfterSeconds = Number(result?.retryAfterSeconds ?? 0);
+                const retryMinutes = retryAfterSeconds > 0 ? Math.ceil(retryAfterSeconds / 60) : 1;
+                setErrorMsg(`ログイン試行回数の上限に達しました。${retryMinutes}分後に再試行してください。`);
+                return;
+            }
+
+            if (!response.ok) {
                 setErrorMsg('メールアドレスまたはパスワードが間違っています。');
                 return;
             }
 
-            if (data.user) {
-                console.log('Login Success:', data.user.email);
-                // navigate('/home') is no longer strictly needed here if wrapped in AuthRoute
-                // because AuthRoute will detect the user and redirect automatically.
-                // But we leave it for immediate UX confirmation.
-                // Actually, letting AuthRoute handle it is cleaner and avoids navigation race conditions.
+            const accessToken = result?.session?.access_token;
+            const refreshToken = result?.session?.refresh_token;
+            if (!accessToken || !refreshToken) {
+                setErrorMsg('ログインに失敗しました。もう一度お試しください。');
+                return;
+            }
+
+            const { error: setSessionError } = await supabase.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshToken,
+            });
+            if (setSessionError) {
+                console.error('Set session error:', setSessionError.message);
+                setErrorMsg('ログインに失敗しました。もう一度お試しください。');
+                return;
+            }
+
+            if (result?.session?.user?.email) {
+                console.log('Login Success:', result.session.user.email);
             }
         } catch (error: any) {
             console.error('Login Error:', error);

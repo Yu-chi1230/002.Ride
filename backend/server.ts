@@ -61,6 +61,22 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
+const parsePositiveIntOrDefault = (value: string | undefined, fallback: number) => {
+    const parsed = Number.parseInt(value ?? '', 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const parsePositiveNumberOrDefault = (value: string | undefined, fallback: number) => {
+    const parsed = Number.parseFloat(value ?? '');
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const LOGIN_MAX_ATTEMPTS = parsePositiveIntOrDefault(process.env.LOGIN_MAX_ATTEMPTS, 5);
+const LOGIN_LOCK_MINUTES = parsePositiveIntOrDefault(process.env.LOGIN_LOCK_MINUTES, 15);
+const LOGIN_ATTEMPT_WINDOW_MINUTES = parsePositiveIntOrDefault(process.env.LOGIN_ATTEMPT_WINDOW_MINUTES, 30);
+const LOGIN_LOCK_MULTIPLIER = parsePositiveNumberOrDefault(process.env.LOGIN_LOCK_MULTIPLIER, 2);
+const LOGIN_LOCK_MAX_MINUTES = parsePositiveIntOrDefault(process.env.LOGIN_LOCK_MAX_MINUTES, 24 * 60);
+
 app.get('/', (_req, res) => {
     res.json({ message: '🏍️ Ride API is running!', status: 'ok' });
 });
@@ -518,6 +534,167 @@ const syncAnnouncementsFromNotion = async (): Promise<{ syncedCount: number; dis
         disabledCount: disabledResult.rowCount ?? 0,
     };
 };
+
+const normalizeEmail = (value: unknown): string => (
+    typeof value === 'string' ? value.trim().toLowerCase() : ''
+);
+
+const extractClientIp = (req: Request): string => {
+    const forwarded = req.headers['x-forwarded-for'];
+    const fromForwarded = typeof forwarded === 'string'
+        ? forwarded.split(',')[0]?.trim()
+        : Array.isArray(forwarded)
+            ? forwarded[0]?.split(',')[0]?.trim()
+            : '';
+    const raw = fromForwarded || req.ip || req.socket.remoteAddress || '';
+    return raw.replace(/^::ffff:/, '');
+};
+
+const getLoginAttemptState = async (emailNormalized: string, ipAddress: string) => {
+    const result = await pool.query<{ failure_count: number; locked_until: Date | null }>(
+        `select failure_count, locked_until
+         from public.login_attempts
+         where email_normalized = $1 and ip_address = $2`,
+        [emailNormalized, ipAddress]
+    );
+
+    return result.rows[0] ?? null;
+};
+
+const recordLoginFailure = async (emailNormalized: string, ipAddress: string) => {
+    const incremented = await pool.query<{ failure_count: number }>(
+        `insert into public.login_attempts (
+            email_normalized,
+            ip_address,
+            failure_count,
+            locked_until,
+            last_attempt_at,
+            created_at,
+            updated_at
+        ) values (
+            $1,
+            $2,
+            1,
+            null,
+            now(),
+            now(),
+            now()
+        )
+        on conflict (email_normalized, ip_address) do update
+        set
+            failure_count = case
+                when public.login_attempts.last_attempt_at < now() - ($3::text || ' minutes')::interval then 1
+                else public.login_attempts.failure_count + 1
+            end,
+            locked_until = null,
+            last_attempt_at = now(),
+            updated_at = now()
+        returning failure_count`,
+        [emailNormalized, ipAddress, LOGIN_ATTEMPT_WINDOW_MINUTES]
+    );
+
+    const failureCount = incremented.rows[0]?.failure_count ?? 1;
+    if (failureCount < LOGIN_MAX_ATTEMPTS) {
+        return { failure_count: failureCount, locked_until: null };
+    }
+
+    // Lock only when the number of failures reaches each threshold boundary:
+    // 5, 10, 15... (with default LOGIN_MAX_ATTEMPTS=5).
+    if (failureCount % LOGIN_MAX_ATTEMPTS !== 0) {
+        return { failure_count: failureCount, locked_until: null };
+    }
+
+    const lockLevel = Math.floor(failureCount / LOGIN_MAX_ATTEMPTS) - 1;
+    const rawLockMinutes = LOGIN_LOCK_MINUTES * Math.pow(LOGIN_LOCK_MULTIPLIER, lockLevel);
+    const lockMinutes = Math.min(
+        LOGIN_LOCK_MAX_MINUTES,
+        Math.max(1, Math.ceil(rawLockMinutes))
+    );
+
+    const locked = await pool.query<{ failure_count: number; locked_until: Date | null }>(
+        `update public.login_attempts
+         set locked_until = now() + ($3::text || ' minutes')::interval,
+             updated_at = now()
+         where email_normalized = $1 and ip_address = $2
+         returning failure_count, locked_until`,
+        [emailNormalized, ipAddress, lockMinutes]
+    );
+
+    return locked.rows[0] ?? { failure_count: failureCount, locked_until: null };
+};
+
+const resetLoginAttempts = async (emailNormalized: string) => {
+    await pool.query(
+        'delete from public.login_attempts where email_normalized = $1',
+        [emailNormalized]
+    );
+};
+
+app.post('/api/auth/login', async (req: Request, res: Response) => {
+    const emailNormalized = normalizeEmail(req.body?.email);
+    const password = typeof req.body?.password === 'string' ? req.body.password.trim() : '';
+    const ipAddress = extractClientIp(req);
+
+    if (!emailNormalized || !password) {
+        return res.status(400).json({ error: 'メールアドレスとパスワードを入力してください。' });
+    }
+
+    try {
+        const currentAttemptState = await getLoginAttemptState(emailNormalized, ipAddress);
+        const now = new Date();
+
+        if (currentAttemptState?.locked_until && currentAttemptState.locked_until > now) {
+            const retryAfterSeconds = Math.max(
+                1,
+                Math.ceil((currentAttemptState.locked_until.getTime() - now.getTime()) / 1000)
+            );
+            return res.status(429).json({
+                error: 'ログイン試行回数の上限に達しました。しばらくしてから再試行してください。',
+                retryAfterSeconds,
+                lockedUntil: currentAttemptState.locked_until.toISOString(),
+            });
+        }
+
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email: emailNormalized,
+            password,
+        });
+
+        if (error || !data.session || !data.user) {
+            const updatedAttemptState = await recordLoginFailure(emailNormalized, ipAddress);
+            const lockedUntil = updatedAttemptState.locked_until;
+
+            if (lockedUntil && lockedUntil > now) {
+                const retryAfterSeconds = Math.max(1, Math.ceil((lockedUntil.getTime() - now.getTime()) / 1000));
+                return res.status(429).json({
+                    error: 'ログイン試行回数の上限に達しました。しばらくしてから再試行してください。',
+                    retryAfterSeconds,
+                    lockedUntil: lockedUntil.toISOString(),
+                });
+            }
+
+            return res.status(401).json({
+                error: 'メールアドレスまたはパスワードが間違っています。',
+            });
+        }
+
+        await resetLoginAttempts(emailNormalized);
+
+        return res.status(200).json({
+            session: {
+                access_token: data.session.access_token,
+                refresh_token: data.session.refresh_token,
+                expires_in: data.session.expires_in,
+                expires_at: data.session.expires_at,
+                token_type: data.session.token_type,
+                user: data.user,
+            },
+        });
+    } catch (error: any) {
+        console.error('[POST /api/auth/login] Failed:', error?.message || error);
+        return res.status(500).json({ error: 'ログイン処理中にエラーが発生しました。' });
+    }
+});
 
 app.post('/api/contact', attachOptionalUser, async (req: AuthRequest, res: Response) => {
     const { name, email, category, subject, message, metadata } = req.body ?? {};

@@ -7,20 +7,26 @@ import LoginPage from '../../pages/LoginPage';
 const {
     mockNavigate,
     mockSignInWithOAuth,
-    mockSignInWithPassword,
+    mockSetSession,
+    mockApiFetch,
 } = vi.hoisted(() => ({
     mockNavigate: vi.fn(),
     mockSignInWithOAuth: vi.fn(),
-    mockSignInWithPassword: vi.fn(),
+    mockSetSession: vi.fn(),
+    mockApiFetch: vi.fn(),
 }));
 
 vi.mock('../lib/supabase', () => ({
     supabase: {
         auth: {
             signInWithOAuth: mockSignInWithOAuth,
-            signInWithPassword: mockSignInWithPassword,
+            setSession: mockSetSession,
         },
     },
+}));
+
+vi.mock('../lib/api', () => ({
+    apiFetch: mockApiFetch,
 }));
 
 vi.mock('react-router-dom', async () => {
@@ -43,7 +49,9 @@ describe('LoginPage', () => {
     beforeEach(() => {
         mockNavigate.mockReset();
         mockSignInWithOAuth.mockReset();
-        mockSignInWithPassword.mockReset();
+        mockSetSession.mockReset();
+        mockApiFetch.mockReset();
+        mockSetSession.mockResolvedValue({ error: null });
         vi.spyOn(console, 'error').mockImplementation(() => {});
         vi.spyOn(console, 'log').mockImplementation(() => {});
     });
@@ -92,7 +100,7 @@ describe('LoginPage', () => {
         fireEvent.submit(screen.getByRole('button', { name: 'ログイン' }).closest('form')!);
 
         expect(screen.getByText('メールアドレスとパスワードを入力してください。')).toBeInTheDocument();
-        expect(mockSignInWithPassword).not.toHaveBeenCalled();
+        expect(mockApiFetch).not.toHaveBeenCalled();
     });
 
     it.each([
@@ -108,12 +116,22 @@ describe('LoginPage', () => {
         fireEvent.submit(screen.getByRole('button', { name: 'ログイン' }).closest('form')!);
 
         expect(screen.getByText('パスワードは8文字以上で、英字と数字をそれぞれ1文字以上含める必要があります。')).toBeInTheDocument();
-        expect(mockSignInWithPassword).not.toHaveBeenCalled();
+        expect(mockApiFetch).not.toHaveBeenCalled();
     });
 
     it('LP-UT-006 入力 trim: 前後空白を除去して API に渡す', async () => {
         const user = userEvent.setup();
-        mockSignInWithPassword.mockResolvedValue({ data: { user: { email: 'test@example.com' } }, error: null });
+        mockApiFetch.mockResolvedValue({
+            ok: true,
+            status: 200,
+            json: vi.fn().mockResolvedValue({
+                session: {
+                    access_token: 'access-token',
+                    refresh_token: 'refresh-token',
+                    user: { email: 'test@example.com' },
+                },
+            }),
+        });
         renderLoginPage();
 
         await user.type(screen.getByPlaceholderText('メールアドレス'), '  test@example.com  ');
@@ -121,17 +139,20 @@ describe('LoginPage', () => {
         fireEvent.submit(screen.getByRole('button', { name: 'ログイン' }).closest('form')!);
 
         await waitFor(() => {
-            expect(mockSignInWithPassword).toHaveBeenCalledWith({
-                email: 'test@example.com',
-                password: 'abc12345',
-            });
+            expect(mockApiFetch).toHaveBeenCalledWith('/api/auth/login', {
+                method: 'POST',
+                body: JSON.stringify({
+                    email: 'test@example.com',
+                    password: 'abc12345',
+                }),
+            }, null);
         });
     });
 
     it('LP-UT-007 メールログイン正常系: 正しい引数で 1 回呼び、ローディング表示が戻る', async () => {
         const user = userEvent.setup();
         let resolveLogin: (value: any) => void = () => {};
-        mockSignInWithPassword.mockReturnValue(new Promise((resolve) => {
+        mockApiFetch.mockReturnValue(new Promise((resolve) => {
             resolveLogin = resolve;
         }));
         renderLoginPage();
@@ -142,20 +163,37 @@ describe('LoginPage', () => {
 
         expect(screen.getByRole('button', { name: 'ログイン中...' })).toBeDisabled();
 
-        resolveLogin({ data: { user: { email: 'test@example.com' } }, error: null });
+        resolveLogin({
+            ok: true,
+            status: 200,
+            json: vi.fn().mockResolvedValue({
+                session: {
+                    access_token: 'access-token',
+                    refresh_token: 'refresh-token',
+                    user: { email: 'test@example.com' },
+                },
+            }),
+        });
 
         await waitFor(() => {
             expect(screen.getByRole('button', { name: 'ログイン' })).toBeEnabled();
         });
-        expect(mockSignInWithPassword).toHaveBeenCalledTimes(1);
+        expect(mockApiFetch).toHaveBeenCalledTimes(1);
+        expect(mockSetSession).toHaveBeenCalledWith({
+            access_token: 'access-token',
+            refresh_token: 'refresh-token',
+        });
         expect(screen.queryByText('メールアドレスまたはパスワードが間違っています。')).not.toBeInTheDocument();
     });
 
     it('LP-UT-008 メールログイン認証失敗: 専用メッセージを表示する', async () => {
         const user = userEvent.setup();
-        mockSignInWithPassword.mockResolvedValue({
-            data: { user: null },
-            error: { message: 'Invalid login credentials' },
+        mockApiFetch.mockResolvedValue({
+            ok: false,
+            status: 401,
+            json: vi.fn().mockResolvedValue({
+                error: 'メールアドレスまたはパスワードが間違っています。',
+            }),
         });
         renderLoginPage();
 
@@ -164,12 +202,32 @@ describe('LoginPage', () => {
         fireEvent.submit(screen.getByRole('button', { name: 'ログイン' }).closest('form')!);
 
         expect(await screen.findByText('メールアドレスまたはパスワードが間違っています。')).toBeInTheDocument();
+        expect(mockSetSession).not.toHaveBeenCalled();
         expect(screen.getByRole('button', { name: 'ログイン' })).toBeEnabled();
+    });
+
+    it('LP-UT-008b メールログインロック: 429 でロック文言を表示する', async () => {
+        const user = userEvent.setup();
+        mockApiFetch.mockResolvedValue({
+            ok: false,
+            status: 429,
+            json: vi.fn().mockResolvedValue({
+                retryAfterSeconds: 600,
+            }),
+        });
+        renderLoginPage();
+
+        await user.type(screen.getByPlaceholderText('メールアドレス'), 'test@example.com');
+        await user.type(screen.getByPlaceholderText('パスワード'), 'abc12345');
+        fireEvent.submit(screen.getByRole('button', { name: 'ログイン' }).closest('form')!);
+
+        expect(await screen.findByText('ログイン試行回数の上限に達しました。10分後に再試行してください。')).toBeInTheDocument();
+        expect(mockSetSession).not.toHaveBeenCalled();
     });
 
     it('LP-UT-009 メールログイン例外: 汎用エラーメッセージを表示する', async () => {
         const user = userEvent.setup();
-        mockSignInWithPassword.mockRejectedValue(new Error('network error'));
+        mockApiFetch.mockRejectedValue(new Error('network error'));
         renderLoginPage();
 
         await user.type(screen.getByPlaceholderText('メールアドレス'), 'test@example.com');
@@ -182,7 +240,7 @@ describe('LoginPage', () => {
 
     it('LP-UT-010 ログイン中表示: 送信中はボタンが disabled になり文言が変わる', async () => {
         const user = userEvent.setup();
-        mockSignInWithPassword.mockReturnValue(new Promise(() => {}));
+        mockApiFetch.mockReturnValue(new Promise(() => {}));
         renderLoginPage();
 
         await user.type(screen.getByPlaceholderText('メールアドレス'), 'test@example.com');
@@ -231,9 +289,23 @@ describe('LoginPage', () => {
 
     it('LP-UT-014 エラークリア: 再送信時に古いエラーが消える', async () => {
         const user = userEvent.setup();
-        mockSignInWithPassword
-            .mockResolvedValueOnce({ data: { user: null }, error: { message: 'Invalid login credentials' } })
-            .mockResolvedValueOnce({ data: { user: { email: 'test@example.com' } }, error: null });
+        mockApiFetch
+            .mockResolvedValueOnce({
+                ok: false,
+                status: 401,
+                json: vi.fn().mockResolvedValue({ error: 'メールアドレスまたはパスワードが間違っています。' }),
+            })
+            .mockResolvedValueOnce({
+                ok: true,
+                status: 200,
+                json: vi.fn().mockResolvedValue({
+                    session: {
+                        access_token: 'access-token',
+                        refresh_token: 'refresh-token',
+                        user: { email: 'test@example.com' },
+                    },
+                }),
+            });
         renderLoginPage();
 
         await user.type(screen.getByPlaceholderText('メールアドレス'), 'test@example.com');
