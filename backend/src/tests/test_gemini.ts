@@ -1,4 +1,4 @@
-import { suggestCinematicSpotsBase } from '../src/services/aiRouteService';
+import { suggestCinematicSpotsBase } from '../services/aiRouteService';
 
 async function runTest() {
     console.log("Starting Gemini API Test...");

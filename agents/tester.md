@@ -28,6 +28,10 @@
 - 期待結果
 - 出力先: `./docs/tests/specification`
 
+### テストコード
+- 出力先（frontendの場合）: `./frontend/src/test`
+- 出力先（backendの場合）: `./backend/src/test`
+
 ### テストエビデンス
 - テスト観点
 - テスト観点に紐づくテスト実施結果
