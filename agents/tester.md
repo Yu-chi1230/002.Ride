@@ -29,6 +29,7 @@
 - 出力先: `./docs/tests/specification`
 
 ### テストコード
+- テスト観点を網羅したテストコード
 - 出力先（frontendの場合）: `./frontend/src/test`
 - 出力先（backendの場合）: `./backend/src/test`
 
