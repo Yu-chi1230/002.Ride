@@ -1,4 +1,5 @@
 # Git Ignored Directories
+agents/
 docs/
 supabase/
 docker-compose.yml
