@@ -1,41 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { MapContainer, TileLayer, Polyline, Marker, Popup, Polygon, useMap } from 'react-leaflet';
-import L from 'leaflet';
+import maplibregl, { GeoJSONSource } from 'maplibre-gl';
 import BottomNav from '../components/BottomNav';
 import TouchSlider from '../components/TouchSlider';
 import { apiFetch } from '../src/lib/api';
-import 'leaflet/dist/leaflet.css';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import './ExplorePage.css';
-
-// ===== Leaflet デフォルトアイコン修正 =====
-// Vite でバンドルするとデフォルトマーカーが壊れる問題への対処
-import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
-import markerIcon from 'leaflet/dist/images/marker-icon.png';
-import markerShadow from 'leaflet/dist/images/marker-shadow.png';
-
-// @ts-ignore
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-    iconRetinaUrl: markerIcon2x,
-    iconUrl: markerIcon,
-    shadowUrl: markerShadow,
-});
-
-// ===== ゴールド色のカスタムマーカー（撮影スポット用） =====
-const goldIcon = new L.DivIcon({
-    className: '',
-    html: `<div style="
-        width: 14px; height: 14px;
-        background: #0D1117;
-        border: 2px solid #D4AF37;
-        transform: rotate(45deg);
-        box-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
-    "></div>`,
-    iconSize: [20, 20],
-    iconAnchor: [10, 10],
-    popupAnchor: [0, -10],
-});
 
 // ===== 型定義 =====
 type WaypointData = {
@@ -78,15 +48,6 @@ type RouteResult = {
     cinematic_spots: CinematicSpotData[];
 };
 
-// ===== 地図の中心を更新するヘルパーコンポーネント =====
-function RecenterMap({ lat, lng }: { lat: number; lng: number }) {
-    const map = useMap();
-    useEffect(() => {
-        map.setView([lat, lng], map.getZoom());
-    }, [lat, lng, map]);
-    return null;
-}
-
 // ===== タイムプリセット =====
 const TIME_PRESETS = [
     { label: '00:30', value: 30 },
@@ -97,6 +58,11 @@ const REACHABLE_AREA_AVERAGE_SPEED_KMH = 32;
 const REACHABLE_AREA_RETURN_MARGIN = 0.62;
 const REACHABLE_AREA_POINT_COUNT = 36;
 const EXPLORE_ROUTE_TIMEOUT_MS = 60000;
+const MAP_STYLE_URL =
+    import.meta.env.VITE_MAP_STYLE_URL ||
+    (import.meta.env.VITE_MAPTILER_KEY
+        ? `https://api.maptiler.com/maps/streets-v2/style.json?key=${import.meta.env.VITE_MAPTILER_KEY}`
+        : 'https://tiles.openfreemap.org/styles/liberty');
 
 const buildReachableAreaPolygon = (center: { lat: number; lng: number }, minutes: number): [number, number][] => {
     const reachableDistanceKm =
@@ -153,6 +119,79 @@ const getLightPhaseLabel = (phase: string | null | undefined) => {
     }
 };
 
+const escapeHtml = (value: string) =>
+    value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+const applyJapaneseLabelPreference = (map: maplibregl.Map) => {
+    const layers = map.getStyle()?.layers ?? [];
+    layers.forEach((layer) => {
+        if (layer.type !== 'symbol') {
+            return;
+        }
+        const isRoadLabelLayer = /(road|highway|motorway|trunk|route|shield)/i.test(layer.id);
+        try {
+            const current = map.getLayoutProperty(layer.id, 'text-field');
+            if (!current) {
+                return;
+            }
+            if (isRoadLabelLayer) {
+                const routeRef = [
+                    'coalesce',
+                    ['get', 'ref'],
+                    ['get', 'route_ref'],
+                    ['get', 'nat_ref'],
+                    '',
+                ] as const;
+                const jaName = [
+                    'coalesce',
+                    ['get', 'name:ja'],
+                    ['get', 'name_ja'],
+                    ['get', 'name'],
+                    '',
+                ] as const;
+                const routeNetwork = [
+                    'coalesce',
+                    ['get', 'network'],
+                    ['get', 'route_network'],
+                    ['get', 'nat_network'],
+                    '',
+                ] as const;
+                map.setLayoutProperty(layer.id, 'text-field', [
+                    'coalesce',
+                    [
+                        'case',
+                        ['all', ['>', ['length', routeRef], 0], ['any', ['in', 'pref', routeNetwork], ['in', '県道', jaName]]],
+                        '',
+                        ['all', ['>', ['length', routeRef], 0], ['in', '県道', jaName]],
+                        '',
+                        ['all', ['>', ['length', routeRef], 0], ['any', ['in', 'national', routeNetwork], ['in', '国道', jaName]]],
+                        '',
+                        ['all', ['>', ['length', routeRef], 0], ['in', '国道', jaName]],
+                        '',
+                        ['coalesce', ['get', 'name:ja'], ['get', 'name_ja'], ''],
+                    ],
+                    ['coalesce', ['get', 'name:ja'], ['get', 'name_ja'], ''],
+                ]);
+                map.setPaintProperty(layer.id, 'icon-opacity', 0);
+            } else {
+                map.setLayoutProperty(layer.id, 'text-field', [
+                    'coalesce',
+                    ['get', 'name:ja'],
+                    ['get', 'name_ja'],
+                    '',
+                ]);
+            }
+        } catch {
+            // Some symbol layers don't allow text-field override.
+        }
+    });
+};
+
 // ===== メインコンポーネント =====
 function ExplorePage() {
     const navigate = useNavigate();
@@ -166,6 +205,9 @@ function ExplorePage() {
     const [routeResults, setRouteResults] = useState<RouteResult[] | null>(null);
     const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
     const [isPredefinedRoute, setIsPredefinedRoute] = useState(false);
+    const mapContainerRef = useRef<HTMLDivElement | null>(null);
+    const mapRef = useRef<maplibregl.Map | null>(null);
+    const spotMarkersRef = useRef<maplibregl.Marker[]>([]);
 
     // Provide pre-defined route via location state
     useEffect(() => {
@@ -273,6 +315,182 @@ function ExplorePage() {
         : [];
     const leadSpotSun = activeRouteResult?.cinematic_spots.find((spot) => spot.sun_angle_data?.azimuth !== undefined)?.sun_angle_data ?? null;
 
+    useEffect(() => {
+        if (!userLocation || !mapContainerRef.current || mapRef.current) {
+            return;
+        }
+
+        const map = new maplibregl.Map({
+            container: mapContainerRef.current,
+            style: MAP_STYLE_URL,
+            center: [userLocation.lng, userLocation.lat],
+            zoom: 11,
+            attributionControl: false,
+        });
+        map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+        map.on('load', () => applyJapaneseLabelPreference(map));
+        mapRef.current = map;
+
+        return () => {
+            spotMarkersRef.current.forEach((marker) => marker.remove());
+            spotMarkersRef.current = [];
+            map.remove();
+            mapRef.current = null;
+        };
+    }, [userLocation]);
+
+    useEffect(() => {
+        if (!mapRef.current || !userLocation) {
+            return;
+        }
+        mapRef.current.easeTo({
+            center: [userLocation.lng, userLocation.lat],
+            duration: 700,
+        });
+    }, [userLocation]);
+
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!map) {
+            return;
+        }
+
+        const applyLayers = () => {
+            const areaCoordinates = reachableAreaPositions.map(([lat, lng]) => [lng, lat]);
+            const closedAreaCoordinates =
+                areaCoordinates.length > 2
+                    ? [...areaCoordinates, areaCoordinates[0]]
+                    : [];
+            const areaSourceData: GeoJSON.FeatureCollection = {
+                type: 'FeatureCollection',
+                features: closedAreaCoordinates.length > 0
+                    ? [{
+                        type: 'Feature',
+                        properties: {},
+                        geometry: {
+                            type: 'Polygon',
+                            coordinates: [closedAreaCoordinates],
+                        },
+                    }]
+                    : [],
+            };
+
+            const routeCoordinates = polylinePositions.map(([lat, lng]) => [lng, lat]);
+            const routeSourceData: GeoJSON.FeatureCollection = {
+                type: 'FeatureCollection',
+                features: routeCoordinates.length > 1
+                    ? [{
+                        type: 'Feature',
+                        properties: {},
+                        geometry: {
+                            type: 'LineString',
+                            coordinates: routeCoordinates,
+                        },
+                    }]
+                    : [],
+            };
+
+            const upsertSource = (sourceId: string, data: GeoJSON.FeatureCollection) => {
+                const source = map.getSource(sourceId) as GeoJSONSource | undefined;
+                if (source) {
+                    source.setData(data);
+                    return;
+                }
+                map.addSource(sourceId, { type: 'geojson', data });
+            };
+
+            upsertSource('reachable-area-source', areaSourceData);
+            upsertSource('route-line-source', routeSourceData);
+
+            if (!map.getLayer('reachable-area-fill')) {
+                map.addLayer({
+                    id: 'reachable-area-fill',
+                    type: 'fill',
+                    source: 'reachable-area-source',
+                    paint: {
+                        'fill-color': '#D4AF37',
+                        'fill-opacity': 0.12,
+                    },
+                });
+            }
+            if (!map.getLayer('reachable-area-outline')) {
+                map.addLayer({
+                    id: 'reachable-area-outline',
+                    type: 'line',
+                    source: 'reachable-area-source',
+                    paint: {
+                        'line-color': '#D4AF37',
+                        'line-width': 2,
+                        'line-opacity': 0.8,
+                    },
+                });
+            }
+            if (!map.getLayer('reachable-area-glow')) {
+                map.addLayer({
+                    id: 'reachable-area-glow',
+                    type: 'line',
+                    source: 'reachable-area-source',
+                    paint: {
+                        'line-color': '#F6E7A1',
+                        'line-width': 8,
+                        'line-opacity': 0.08,
+                    },
+                });
+            }
+            if (!map.getLayer('route-line')) {
+                map.addLayer({
+                    id: 'route-line',
+                    type: 'line',
+                    source: 'route-line-source',
+                    paint: {
+                        'line-color': '#D4AF37',
+                        'line-width': 3,
+                        'line-opacity': 0.8,
+                    },
+                });
+            }
+        };
+
+        if (!map.isStyleLoaded()) {
+            map.once('load', applyLayers);
+            return;
+        }
+        applyLayers();
+    }, [reachableAreaPositions, polylinePositions]);
+
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!map) {
+            return;
+        }
+
+        spotMarkersRef.current.forEach((marker) => marker.remove());
+        spotMarkersRef.current = [];
+
+        if (!activeRouteResult) {
+            return;
+        }
+
+        const nextMarkers = activeRouteResult.cinematic_spots
+            .filter((spot) => spot.latitude && spot.longitude)
+            .map((spot) => {
+                const markerElement = document.createElement('div');
+                markerElement.className = 'explore-spot-marker';
+
+                const safeName = escapeHtml(spot.location_name ?? 'スポット');
+                const safeGuide = escapeHtml(spot.shooting_guide ?? '');
+                const popup = new maplibregl.Popup({ offset: 12 }).setHTML(
+                    `<div class="explore-spot-popup"><strong>${safeName}</strong>${safeGuide ? `<div>${safeGuide}</div>` : ''}</div>`
+                );
+
+                return new maplibregl.Marker({ element: markerElement, anchor: 'center' })
+                    .setLngLat([spot.longitude!, spot.latitude!])
+                    .setPopup(popup)
+                    .addTo(map);
+            });
+
+        spotMarkersRef.current = nextMarkers;
+    }, [activeRouteResult]);
 
 
     // ===== 時間のフォーマット（表示用） =====
@@ -308,73 +526,7 @@ function ExplorePage() {
             {/* ===== 地図 ===== */}
             {userLocation && (
                 <div className="explore-map-container">
-                    <MapContainer
-                        center={[userLocation.lat, userLocation.lng]}
-                        zoom={11}
-                        zoomControl={false}
-                        attributionControl={false}
-                        style={{ width: '100%', height: '100%' }}
-                    >
-                        <TileLayer
-                            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                        />
-                        <RecenterMap lat={userLocation.lat} lng={userLocation.lng} />
-
-                        {reachableAreaPositions.length > 0 && (
-                            <>
-                                <Polygon
-                                    positions={reachableAreaPositions}
-                                    pathOptions={{
-                                        color: '#D4AF37',
-                                        weight: 2,
-                                        opacity: 0.8,
-                                        fillColor: '#D4AF37',
-                                        fillOpacity: 0.12,
-                                    }}
-                                />
-                                <Polygon
-                                    positions={reachableAreaPositions}
-                                    pathOptions={{
-                                        color: '#F6E7A1',
-                                        weight: 8,
-                                        opacity: 0.08,
-                                        fillOpacity: 0,
-                                    }}
-                                />
-                            </>
-                        )}
-
-                        {/* ルートのポリライン */}
-                        {activeRouteResult && polylinePositions.length > 0 && (
-                            <Polyline
-                                positions={polylinePositions}
-                                pathOptions={{
-                                    color: '#D4AF37',
-                                    weight: 3,
-                                    opacity: 0.8,
-                                }}
-                            />
-                        )}
-
-                        {/* 撮影スポットマーカー */}
-                        {activeRouteResult?.cinematic_spots
-                            ?.filter((s) => s.latitude && s.longitude)
-                            .map((spot, idx) => (
-                                <Marker
-                                    key={idx}
-                                    position={[spot.latitude!, spot.longitude!]}
-                                    icon={goldIcon}
-                                >
-                                    <Popup>
-                                        <div style={{ color: '#0D1117', fontSize: '0.85rem', fontFamily: "'Noto Sans JP', sans-serif" }}>
-                                            <strong style={{ display: 'block', marginBottom: '4px' }}>{spot.location_name}</strong>
-                                            {spot.shooting_guide}
-                                        </div>
-                                    </Popup>
-                                </Marker>
-                            ))}
-                    </MapContainer>
+                    <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }} />
                 </div>
             )}
 

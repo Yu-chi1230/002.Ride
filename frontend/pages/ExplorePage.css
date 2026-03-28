@@ -28,7 +28,7 @@
     z-index: 1;
 }
 
-.explore-map-container .leaflet-container {
+.explore-map-container .maplibregl-map {
     width: 100%;
     height: 100%;
     background: #0D1117;
@@ -143,9 +143,29 @@
     font-family: 'Inter', 'Roboto Mono', monospace;
 }
 
-/* Dark map tiles overlay tint (Invert OSM standard tiles to dark mode) */
-.leaflet-tile-pane {
-    filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+/* Keep native style colors for vector maps */
+.maplibregl-canvas {
+    filter: none;
+}
+
+.explore-spot-marker {
+    width: 14px;
+    height: 14px;
+    background: #0D1117;
+    border: 2px solid #D4AF37;
+    transform: rotate(45deg);
+    box-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
+}
+
+.explore-spot-popup {
+    color: #0D1117;
+    font-size: 0.85rem;
+    font-family: 'Noto Sans JP', sans-serif;
+}
+
+.explore-spot-popup strong {
+    display: block;
+    margin-bottom: 4px;
 }
 
 /* ===== Top Header Overlay ===== */

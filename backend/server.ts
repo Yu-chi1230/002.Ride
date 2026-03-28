@@ -7,6 +7,7 @@ import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { randomUUID } from 'crypto';
 import { extname } from 'path';
+import { createLoginHandler } from './src/auth/loginHandler';
 
 const app = express();
 const PORT = 8001;
@@ -535,21 +536,6 @@ const syncAnnouncementsFromNotion = async (): Promise<{ syncedCount: number; dis
     };
 };
 
-const normalizeEmail = (value: unknown): string => (
-    typeof value === 'string' ? value.trim().toLowerCase() : ''
-);
-
-const extractClientIp = (req: Request): string => {
-    const forwarded = req.headers['x-forwarded-for'];
-    const fromForwarded = typeof forwarded === 'string'
-        ? forwarded.split(',')[0]?.trim()
-        : Array.isArray(forwarded)
-            ? forwarded[0]?.split(',')[0]?.trim()
-            : '';
-    const raw = fromForwarded || req.ip || req.socket.remoteAddress || '';
-    return raw.replace(/^::ffff:/, '');
-};
-
 const getLoginAttemptState = async (emailNormalized: string, ipAddress: string) => {
     const result = await pool.query<{ failure_count: number; locked_until: Date | null }>(
         `select failure_count, locked_until
@@ -630,71 +616,13 @@ const resetLoginAttempts = async (emailNormalized: string) => {
     );
 };
 
-app.post('/api/auth/login', async (req: Request, res: Response) => {
-    const emailNormalized = normalizeEmail(req.body?.email);
-    const password = typeof req.body?.password === 'string' ? req.body.password.trim() : '';
-    const ipAddress = extractClientIp(req);
-
-    if (!emailNormalized || !password) {
-        return res.status(400).json({ error: 'メールアドレスとパスワードを入力してください。' });
-    }
-
-    try {
-        const currentAttemptState = await getLoginAttemptState(emailNormalized, ipAddress);
-        const now = new Date();
-
-        if (currentAttemptState?.locked_until && currentAttemptState.locked_until > now) {
-            const retryAfterSeconds = Math.max(
-                1,
-                Math.ceil((currentAttemptState.locked_until.getTime() - now.getTime()) / 1000)
-            );
-            return res.status(429).json({
-                error: 'ログイン試行回数の上限に達しました。しばらくしてから再試行してください。',
-                retryAfterSeconds,
-                lockedUntil: currentAttemptState.locked_until.toISOString(),
-            });
-        }
-
-        const { data, error } = await supabase.auth.signInWithPassword({
-            email: emailNormalized,
-            password,
-        });
-
-        if (error || !data.session || !data.user) {
-            const updatedAttemptState = await recordLoginFailure(emailNormalized, ipAddress);
-            const lockedUntil = updatedAttemptState.locked_until;
-
-            if (lockedUntil && lockedUntil > now) {
-                const retryAfterSeconds = Math.max(1, Math.ceil((lockedUntil.getTime() - now.getTime()) / 1000));
-                return res.status(429).json({
-                    error: 'ログイン試行回数の上限に達しました。しばらくしてから再試行してください。',
-                    retryAfterSeconds,
-                    lockedUntil: lockedUntil.toISOString(),
-                });
-            }
-
-            return res.status(401).json({
-                error: 'メールアドレスまたはパスワードが間違っています。',
-            });
-        }
-
-        await resetLoginAttempts(emailNormalized);
-
-        return res.status(200).json({
-            session: {
-                access_token: data.session.access_token,
-                refresh_token: data.session.refresh_token,
-                expires_in: data.session.expires_in,
-                expires_at: data.session.expires_at,
-                token_type: data.session.token_type,
-                user: data.user,
-            },
-        });
-    } catch (error: any) {
-        console.error('[POST /api/auth/login] Failed:', error?.message || error);
-        return res.status(500).json({ error: 'ログイン処理中にエラーが発生しました。' });
-    }
-});
+app.post('/api/auth/login', createLoginHandler({
+    signInWithPassword: (params) => supabase.auth.signInWithPassword(params),
+    getLoginAttemptState,
+    recordLoginFailure,
+    resetLoginAttempts,
+    logError: (message, error) => console.error(message, error),
+}));
 
 app.post('/api/contact', attachOptionalUser, async (req: AuthRequest, res: Response) => {
     const { name, email, category, subject, message, metadata } = req.body ?? {};

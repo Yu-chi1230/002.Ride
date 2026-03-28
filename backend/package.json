@@ -6,7 +6,8 @@
     "scripts": {
         "start": "ts-node server.ts",
         "dev": "nodemon --exec ts-node server.ts",
-        "build": "tsc"
+        "build": "tsc",
+        "test:unit": "node --test -r ts-node/register"
     },
     "dependencies": {
         "@google/genai": "^1.43.0",

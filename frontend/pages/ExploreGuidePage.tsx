@@ -1,49 +1,88 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
-import L from 'leaflet';
+import maplibregl, { GeoJSONSource } from 'maplibre-gl';
 import { apiFetch } from '../src/lib/api';
-import 'leaflet/dist/leaflet.css';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import './ExploreGuidePage.css';
 
-// ===== カスタムアイコン群 =====
-const goldIcon = new L.DivIcon({
-    className: '',
-    html: `<div style="
-        width: 24px; height: 24px;
-        background: linear-gradient(135deg, #c8a050, #a4803a);
-        border-radius: 50% 50% 50% 0;
-        transform: rotate(-45deg);
-        border: 2px solid #fff;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-        display: flex; align-items: center; justify-content: center;
-    "><span style="transform: rotate(45deg); font-size: 10px;">📸</span></div>`,
-    iconSize: [24, 24],
-    iconAnchor: [12, 24],
-    popupAnchor: [0, -24],
-});
+const MAP_STYLE_URL =
+    import.meta.env.VITE_MAP_STYLE_URL ||
+    (import.meta.env.VITE_MAPTILER_KEY
+        ? `https://api.maptiler.com/maps/streets-v2/style.json?key=${import.meta.env.VITE_MAPTILER_KEY}`
+        : 'https://tiles.openfreemap.org/styles/liberty');
 
-const userLocationIcon = new L.DivIcon({
-    className: '',
-    html: `<div class="user-location-marker">
-             <div class="user-location-pulse"></div>
-             <div class="user-location-dot"></div>
-           </div>`,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
-});
+const escapeHtml = (value: string) =>
+    value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 
-// ===== 追従コンポーネント =====
-function TrackUserLocation({ lat, lng, isTracking }: { lat: number; lng: number, isTracking: boolean }) {
-    const map = useMap();
-    useEffect(() => {
-        if (isTracking && lat && lng) {
-            // center the map smoothly on the user's location
-            map.flyTo([lat, lng], 16, { animate: true, duration: 1.5 });
+const applyJapaneseLabelPreference = (map: maplibregl.Map) => {
+    const layers = map.getStyle()?.layers ?? [];
+    layers.forEach((layer) => {
+        if (layer.type !== 'symbol') {
+            return;
         }
-    }, [lat, lng, isTracking, map]);
-    return null;
-}
+        const isRoadLabelLayer = /(road|highway|motorway|trunk|route|shield)/i.test(layer.id);
+        try {
+            const current = map.getLayoutProperty(layer.id, 'text-field');
+            if (!current) {
+                return;
+            }
+            if (isRoadLabelLayer) {
+                const routeRef = [
+                    'coalesce',
+                    ['get', 'ref'],
+                    ['get', 'route_ref'],
+                    ['get', 'nat_ref'],
+                    '',
+                ] as const;
+                const jaName = [
+                    'coalesce',
+                    ['get', 'name:ja'],
+                    ['get', 'name_ja'],
+                    ['get', 'name'],
+                    '',
+                ] as const;
+                const routeNetwork = [
+                    'coalesce',
+                    ['get', 'network'],
+                    ['get', 'route_network'],
+                    ['get', 'nat_network'],
+                    '',
+                ] as const;
+                map.setLayoutProperty(layer.id, 'text-field', [
+                    'coalesce',
+                    [
+                        'case',
+                        ['all', ['>', ['length', routeRef], 0], ['any', ['in', 'pref', routeNetwork], ['in', '県道', jaName]]],
+                        '',
+                        ['all', ['>', ['length', routeRef], 0], ['in', '県道', jaName]],
+                        '',
+                        ['all', ['>', ['length', routeRef], 0], ['any', ['in', 'national', routeNetwork], ['in', '国道', jaName]]],
+                        '',
+                        ['all', ['>', ['length', routeRef], 0], ['in', '国道', jaName]],
+                        '',
+                        ['coalesce', ['get', 'name:ja'], ['get', 'name_ja'], ''],
+                    ],
+                    ['coalesce', ['get', 'name:ja'], ['get', 'name_ja'], ''],
+                ]);
+                map.setPaintProperty(layer.id, 'icon-opacity', 0);
+            } else {
+                map.setLayoutProperty(layer.id, 'text-field', [
+                    'coalesce',
+                    ['get', 'name:ja'],
+                    ['get', 'name_ja'],
+                    '',
+                ]);
+            }
+        } catch {
+            // Some symbol layers don't allow text-field override.
+        }
+    });
+};
 
 // ===== 型定義 =====
 type WaypointData = {
@@ -98,6 +137,10 @@ export default function ExploreGuidePage() {
     });
     const [isTracking, setIsTracking] = useState(true); // Toggle auto-center
     const watchIdRef = useRef<number | null>(null);
+    const mapContainerRef = useRef<HTMLDivElement | null>(null);
+    const mapRef = useRef<maplibregl.Map | null>(null);
+    const userMarkerRef = useRef<maplibregl.Marker | null>(null);
+    const spotMarkersRef = useRef<maplibregl.Marker[]>([]);
 
     // 1. ルートデータのフェッチ
     const fetchRoute = useCallback(async () => {
@@ -163,6 +206,145 @@ export default function ExploreGuidePage() {
             ?.sort((a, b) => a.order_index - b.order_index)
             .map((wp) => [wp.latitude, wp.longitude]) ?? [];
 
+    useEffect(() => {
+        if (!mapContainerRef.current || mapRef.current) {
+            return;
+        }
+
+        const map = new maplibregl.Map({
+            container: mapContainerRef.current,
+            style: MAP_STYLE_URL,
+            center: [currentPos.lng, currentPos.lat],
+            zoom: 16,
+            attributionControl: false,
+        });
+        map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+        map.on('load', () => applyJapaneseLabelPreference(map));
+        map.on('dragstart', () => setIsTracking(false));
+        mapRef.current = map;
+
+        return () => {
+            userMarkerRef.current?.remove();
+            userMarkerRef.current = null;
+            spotMarkersRef.current.forEach((marker) => marker.remove());
+            spotMarkersRef.current = [];
+            map.remove();
+            mapRef.current = null;
+        };
+    }, [currentPos.lat, currentPos.lng]);
+
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!map) {
+            return;
+        }
+
+        if (!userMarkerRef.current) {
+            const markerElement = document.createElement('div');
+            markerElement.className = 'user-location-marker';
+            markerElement.innerHTML = '<div class="user-location-pulse"></div><div class="user-location-dot"></div>';
+            userMarkerRef.current = new maplibregl.Marker({
+                element: markerElement,
+                anchor: 'center',
+            }).setLngLat([currentPos.lng, currentPos.lat]).addTo(map);
+        } else {
+            userMarkerRef.current.setLngLat([currentPos.lng, currentPos.lat]);
+        }
+
+        if (isTracking) {
+            map.easeTo({
+                center: [currentPos.lng, currentPos.lat],
+                zoom: 16,
+                duration: 1200,
+            });
+        }
+    }, [currentPos, isTracking]);
+
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!map) {
+            return;
+        }
+
+        const applyRouteLayer = () => {
+            const lineCoordinates = polylinePositions.map(([lat, lng]) => [lng, lat]);
+            const lineData: GeoJSON.FeatureCollection = {
+                type: 'FeatureCollection',
+                features: lineCoordinates.length > 1
+                    ? [{
+                        type: 'Feature',
+                        properties: {},
+                        geometry: {
+                            type: 'LineString',
+                            coordinates: lineCoordinates,
+                        },
+                    }]
+                    : [],
+            };
+
+            const sourceId = 'guide-route-source';
+            const layerId = 'guide-route-layer';
+            const source = map.getSource(sourceId) as GeoJSONSource | undefined;
+            if (source) {
+                source.setData(lineData);
+            } else {
+                map.addSource(sourceId, { type: 'geojson', data: lineData });
+            }
+
+            if (!map.getLayer(layerId)) {
+                map.addLayer({
+                    id: layerId,
+                    type: 'line',
+                    source: sourceId,
+                    paint: {
+                        'line-color': '#c8a050',
+                        'line-width': 6,
+                        'line-opacity': 0.7,
+                    },
+                    layout: {
+                        'line-cap': 'round',
+                        'line-join': 'round',
+                    },
+                });
+            }
+        };
+
+        if (!map.isStyleLoaded()) {
+            map.once('load', applyRouteLayer);
+            return;
+        }
+        applyRouteLayer();
+    }, [polylinePositions]);
+
+    useEffect(() => {
+        const map = mapRef.current;
+        if (!map || !routeData) {
+            return;
+        }
+
+        spotMarkersRef.current.forEach((marker) => marker.remove());
+        spotMarkersRef.current = [];
+
+        const nextMarkers = routeData.cinematic_spots
+            .filter((spot) => spot.latitude && spot.longitude)
+            .map((spot) => {
+                const markerElement = document.createElement('div');
+                markerElement.className = 'guide-spot-marker';
+                markerElement.innerHTML = '<span>📸</span>';
+
+                const popup = new maplibregl.Popup({ offset: 18 }).setHTML(
+                    `<div class="guide-spot-popup"><strong>${escapeHtml(spot.location_name ?? 'スポット')}</strong></div>`
+                );
+
+                return new maplibregl.Marker({
+                    element: markerElement,
+                    anchor: 'bottom',
+                }).setLngLat([spot.longitude!, spot.latitude!]).setPopup(popup).addTo(map);
+            });
+
+        spotMarkersRef.current = nextMarkers;
+    }, [routeData]);
+
     // Simple nearest spot calculation
     const nearestSpot = routeData?.cinematic_spots[0]; // For MVP, just show the first spot
 
@@ -204,57 +386,7 @@ export default function ExploreGuidePage() {
         <div className="guide-page">
             {/* ===== Map Layer ===== */}
             <div className="guide-map-container">
-                <MapContainer
-                    center={[currentPos.lat, currentPos.lng]}
-                    zoom={16}
-                    zoomControl={false}
-                    attributionControl={false}
-                    style={{ width: '100%', height: '100%' }}
-                // Handle map drag to temporarily disable auto-tracking
-                // onDragStart={() => setIsTracking(false)} 
-                >
-                    <TileLayer
-                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                        attribution='&copy; OpenStreetMap contributors'
-                    />
-
-                    {/* ユーザー現在地 */}
-                    <Marker position={[currentPos.lat, currentPos.lng]} icon={userLocationIcon} />
-
-                    {/* カメラ追従ロジック */}
-                    <TrackUserLocation lat={currentPos.lat} lng={currentPos.lng} isTracking={isTracking} />
-
-                    {/* ルートの線 */}
-                    {polylinePositions.length > 0 && (
-                        <Polyline
-                            positions={polylinePositions}
-                            pathOptions={{
-                                color: '#c8a050',
-                                weight: 6,
-                                opacity: 0.7,
-                                lineCap: 'round',
-                                lineJoin: 'round'
-                            }}
-                        />
-                    )}
-
-                    {/* 撮影スポット */}
-                    {routeData.cinematic_spots
-                        .filter((s) => s.latitude && s.longitude)
-                        .map((spot, idx) => (
-                            <Marker
-                                key={idx}
-                                position={[spot.latitude!, spot.longitude!]}
-                                icon={goldIcon}
-                            >
-                                <Popup>
-                                    <div style={{ color: '#333', fontSize: '0.8rem' }}>
-                                        <strong>{spot.location_name}</strong>
-                                    </div>
-                                </Popup>
-                            </Marker>
-                        ))}
-                </MapContainer>
+                <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }} />
             </div>
 
             {/* ===== HUD Top (Notifications) ===== */}
