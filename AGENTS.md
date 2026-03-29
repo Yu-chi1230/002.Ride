@@ -38,8 +38,13 @@
 - レビュー担当: `agents/reviewer.md`
 - 実装担当: `agents/implementer.md`
 - 設計担当: `agents/planner.md`
-- テスト担当: `agents/tester.md`
-- レビュー担当: `agents/reviewer.md`
+- 単体テスト担当: `agents/testerUT.md`
+- 結合テスト担当: `agents/testerIT.md`
+- システムテスト担当: `agents/testerST.md`
+- 回帰テスト担当: `agents/testerRT.md`
+- セキュリティテスト担当: `agents/testerSEC.md`
+- ユーザビリティテスト担当: `agents/testerUX.md`
+- 開発ログ担当: `agents/notionAI.md`
 
 会話で役割を指定する例:
 
