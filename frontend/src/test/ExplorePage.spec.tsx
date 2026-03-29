@@ -157,7 +157,7 @@ describe('ExplorePage', () => {
         cleanup();
     });
 
-    it('EX-UT-001 初期表示: 探索UIが表示される', async () => {
+    it('EXM-UT-001 初期表示: 探索UIが表示される', async () => {
         renderExplorePage();
 
         expect(await screen.findByText('探索を開始する')).toBeInTheDocument();
@@ -165,7 +165,7 @@ describe('ExplorePage', () => {
         expect(screen.getByTestId('bottom-nav')).toBeInTheDocument();
     });
 
-    it('EX-UT-003 ルート探索API正常系: 探索開始でAPIが呼ばれる', async () => {
+    it('EXM-UT-002 ルート探索API正常系: 探索開始でAPIが呼ばれる', async () => {
         renderExplorePage();
         const user = userEvent.setup();
 
@@ -189,7 +189,7 @@ describe('ExplorePage', () => {
         expect(await screen.findByText('1件のルートが見つかりました')).toBeInTheDocument();
     });
 
-    it('EX-UT-005 探索失敗時の状態復帰: API失敗後に再操作可能', async () => {
+    it('EXM-UT-003 探索失敗時の状態復帰: API失敗後に再操作可能', async () => {
         mockApiFetch.mockResolvedValueOnce({
             ok: false,
             json: vi.fn(),

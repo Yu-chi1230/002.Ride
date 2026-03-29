@@ -8,6 +8,16 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { randomUUID } from 'crypto';
 import { extname } from 'path';
 import { createLoginHandler } from './src/auth/loginHandler';
+import { createLatestRouteHandler } from './src/explore/latestRouteHandler';
+import { createRouteDetailsHandler } from './src/explore/routeDetailsHandler';
+import { createHealthMileageHandler } from './src/health/mileageHandler';
+import { createGenerateHandler } from './src/create/generateHandler';
+import {
+    OIL_MAINTENANCE_ITEM_NAMES,
+    buildVehicleWithMaintenanceStatus,
+    hasOilChangeStateChanged,
+    syncManualOilChangeHistory
+} from './src/settings/maintenance';
 
 const app = express();
 const PORT = 8001;
@@ -78,6 +88,44 @@ const LOGIN_ATTEMPT_WINDOW_MINUTES = parsePositiveIntOrDefault(process.env.LOGIN
 const LOGIN_LOCK_MULTIPLIER = parsePositiveNumberOrDefault(process.env.LOGIN_LOCK_MULTIPLIER, 2);
 const LOGIN_LOCK_MAX_MINUTES = parsePositiveIntOrDefault(process.env.LOGIN_LOCK_MAX_MINUTES, 24 * 60);
 
+const latestRouteHandler = createLatestRouteHandler({
+    findLatestRoute: async (userId) => prisma.routes.findFirst({
+        where: { user_id: userId },
+        orderBy: { created_at: 'desc' },
+    }),
+});
+
+const healthMileageHandler = createHealthMileageHandler({
+    findVehicleByUserId: async (userId) => prisma.vehicles.findFirst({
+        where: { user_id: userId }
+    }),
+    updateMileage: async (vehicle, normalizedMileage) => prisma.$transaction(async (tx) => {
+        const updatedVehicle = await tx.vehicles.update({
+            where: { id: vehicle.id as string },
+            data: {
+                current_mileage: normalizedMileage
+            }
+        });
+
+        const healthLog = await tx.health_logs.create({
+            data: {
+                vehicle_id: vehicle.id as string,
+                log_type: 'engine',
+                media_url: null,
+                detected_mileage: normalizedMileage,
+                ai_feedback: '手動ODO入力により走行距離を更新しました。',
+                raw_ai_response: {
+                    type: 'manual_mileage',
+                    mileage: normalizedMileage
+                }
+            }
+        });
+
+        return { updatedVehicle, healthLog };
+    }),
+    buildVehicleWithMaintenanceStatus: async (vehicle) => buildVehicleWithMaintenanceStatus(prisma, vehicle),
+});
+
 app.get('/', (_req, res) => {
     res.json({ message: '🏍️ Ride API is running!', status: 'ok' });
 });
@@ -91,9 +139,6 @@ interface AuthRequest extends Request {
     user?: any; // Supabase user type
     file?: Express.Multer.File;
 }
-
-const OIL_MAINTENANCE_ITEM_NAMES = ['oil', 'engine_oil'];
-const MANUAL_OIL_CHANGE_HISTORY_NOTE_MARKER = 'source=manual_oil_change_registration';
 
 const inferFileExtension = (file: Express.Multer.File) => {
     const originalExt = extname(file.originalname || '').toLowerCase();
@@ -140,92 +185,6 @@ const uploadHealthMediaOrThrow = async (
     }
 
     return objectPath;
-};
-
-const buildVehicleWithMaintenanceStatus = async (db: any, vehicle: any) => {
-    const oilSetting = await db.maintenance_settings.findFirst({
-        where: {
-            vehicle_id: vehicle.id,
-            item_name: { in: OIL_MAINTENANCE_ITEM_NAMES }
-        }
-    });
-
-    const currentMileage = vehicle.current_mileage;
-    const lastOilChangeMileage = vehicle.last_oil_change_mileage;
-    const distanceSinceLastChange =
-        currentMileage !== null &&
-            currentMileage !== undefined &&
-            lastOilChangeMileage !== null &&
-            lastOilChangeMileage !== undefined
-            ? Math.max(0, currentMileage - lastOilChangeMileage)
-            : null;
-
-    const remainingKm =
-        oilSetting && distanceSinceLastChange !== null
-            ? oilSetting.interval_km - distanceSinceLastChange
-            : null;
-
-    return {
-        ...vehicle,
-        oil_maintenance_status: oilSetting ? {
-            item_name: oilSetting.item_name,
-            interval_km: oilSetting.interval_km,
-            distance_since_last_change: distanceSinceLastChange,
-            remaining_km: remainingKm,
-            is_overdue: remainingKm !== null ? remainingKm <= 0 : false
-        } : null
-    };
-};
-
-const formatDateOnly = (value: Date | null | undefined) => {
-    if (!value) {
-        return null;
-    }
-
-    return value.toISOString().slice(0, 10);
-};
-
-const hasOilChangeStateChanged = (
-    previousVehicle: { last_oil_change_mileage: number | null; last_oil_change_date: Date | null },
-    nextVehicle: { last_oil_change_mileage: number | null; last_oil_change_date: Date | null }
-) => {
-    return previousVehicle.last_oil_change_mileage !== nextVehicle.last_oil_change_mileage ||
-        formatDateOnly(previousVehicle.last_oil_change_date) !== formatDateOnly(nextVehicle.last_oil_change_date);
-};
-
-const syncManualOilChangeHistory = async (
-    tx: any,
-    vehicle: { id: string; last_oil_change_mileage: number | null; last_oil_change_date: Date | null }
-) => {
-    await tx.maintenance_history.deleteMany({
-        where: {
-            vehicle_id: vehicle.id,
-            action_type: 'オイル交換',
-            notes: { contains: MANUAL_OIL_CHANGE_HISTORY_NOTE_MARKER }
-        }
-    });
-
-    if (vehicle.last_oil_change_mileage === null || vehicle.last_oil_change_mileage === undefined) {
-        return;
-    }
-
-    const noteParts = [MANUAL_OIL_CHANGE_HISTORY_NOTE_MARKER];
-
-    if (vehicle.last_oil_change_date) {
-        noteParts.push(`last_oil_change_date=${formatDateOnly(vehicle.last_oil_change_date)}`);
-    }
-
-    noteParts.push(`last_oil_change_mileage=${vehicle.last_oil_change_mileage}`);
-
-    await tx.maintenance_history.create({
-        data: {
-            vehicle_id: vehicle.id,
-            action_type: 'オイル交換',
-            executed_at: vehicle.last_oil_change_date ?? new Date(),
-            mileage_at_execution: vehicle.last_oil_change_mileage,
-            notes: noteParts.join(', ')
-        }
-    });
 };
 
 // Supabase JWT Verification Middleware
@@ -1297,84 +1256,7 @@ app.post('/api/health/analyze-audio', requireAuth, upload.single('audio'), async
     }
 });
 
-app.put('/api/health/mileage', requireAuth, async (req: AuthRequest, res: Response) => {
-    try {
-        if (!req.user) {
-            return res.status(401).json({ error: 'Unauthorized' });
-        }
-
-        const userId = req.user.id;
-        const { mileage } = req.body;
-
-        if (mileage === undefined || mileage === null || mileage === '') {
-            return res.status(400).json({ error: 'mileage is required' });
-        }
-
-        const parsedMileage = Number(mileage);
-        if (!Number.isFinite(parsedMileage) || parsedMileage < 0) {
-            return res.status(400).json({ error: 'Invalid mileage' });
-        }
-
-        const vehicle = await prisma.vehicles.findFirst({
-            where: { user_id: userId }
-        });
-
-        if (!vehicle) {
-            return res.status(404).json({ error: 'Vehicle not found' });
-        }
-
-        const normalizedMileage = Math.trunc(parsedMileage);
-
-        if (
-            vehicle.last_oil_change_mileage !== null &&
-            vehicle.last_oil_change_mileage !== undefined &&
-            normalizedMileage < vehicle.last_oil_change_mileage
-        ) {
-            return res.status(400).json({
-                error: `現在の走行距離は前回オイル交換時の走行距離以上で入力してください。前回オイル交換時: ${vehicle.last_oil_change_mileage.toLocaleString()}km`
-            });
-        }
-
-        const result = await prisma.$transaction(async (tx) => {
-            const updatedVehicle = await tx.vehicles.update({
-                where: { id: vehicle.id },
-                data: {
-                    current_mileage: normalizedMileage
-                }
-            });
-
-            const healthLog = await tx.health_logs.create({
-                data: {
-                    vehicle_id: vehicle.id,
-                    log_type: 'engine',
-                    media_url: null,
-                    detected_mileage: normalizedMileage,
-                    ai_feedback: '手動ODO入力により走行距離を更新しました。',
-                    raw_ai_response: {
-                        type: 'manual_mileage',
-                        mileage: normalizedMileage
-                    }
-                }
-            });
-
-            return { updatedVehicle, healthLog };
-        });
-
-        const vehicleWithMaintenanceStatus = await buildVehicleWithMaintenanceStatus(prisma, result.updatedVehicle);
-
-        return res.status(200).json({
-            message: 'Mileage updated successfully',
-            data: {
-                vehicle: vehicleWithMaintenanceStatus,
-                log: result.healthLog,
-                mileage: normalizedMileage
-            }
-        });
-    } catch (error) {
-        console.error('Health Mileage Update Error:', error);
-        return res.status(500).json({ error: 'Internal Server Error during mileage update' });
-    }
-});
+app.put('/api/health/mileage', requireAuth, healthMileageHandler as any);
 
 // ===== Explore: ルート生成API =====
 import { suggestCinematicSpotsBase } from './src/services/aiRouteService';
@@ -1451,6 +1333,20 @@ const rankRoutesByUpcomingPhotoTiming = <T extends {
         return leftDistance - rightDistance;
     });
 };
+
+const routeDetailsHandler = createRouteDetailsHandler({
+    findRouteById: async (routeId) => prisma.routes.findUnique({
+        where: { id: routeId },
+    }),
+    findWaypointsByRouteId: async (routeId) => prisma.waypoints.findMany({
+        where: { route_id: routeId },
+        orderBy: { order_index: 'asc' },
+    }),
+    getRouteGeometryFromWaypoints,
+    findCinematicSpotsByRouteId: async (routeId) => prisma.cinematic_spots.findMany({
+        where: { route_id: routeId },
+    }),
+});
 
 app.post('/api/explore/routes', requireAuth, async (req: AuthRequest, res: Response) => {
     try {
@@ -1623,144 +1519,26 @@ app.post('/api/explore/routes', requireAuth, async (req: AuthRequest, res: Respo
 });
 
 // ===== Explore: 最新ルート取得API =====
-app.get('/api/explore/routes/latest', requireAuth, async (req: AuthRequest, res: Response) => {
-    try {
-        if (!req.user) {
-            return res.status(401).json({ error: 'Unauthorized' });
-        }
-
-        const userId = req.user.id;
-
-        const route = await prisma.routes.findFirst({
-            where: { user_id: userId },
-            orderBy: { created_at: 'desc' },
-        });
-
-        if (!route) {
-            return res.status(404).json({ error: 'No routes found' });
-        }
-
-        res.status(200).json({
-            message: 'Latest route fetched successfully',
-            data: { route }
-        });
-    } catch (error: any) {
-        console.error('Explore Latest Route Fetch Error:', error);
-        res.status(500).json({ error: 'Internal Server Error fetching latest route' });
-    }
-});
+app.get('/api/explore/routes/latest', requireAuth, latestRouteHandler as any);
 
 // ===== Explore: ルート詳細取得API =====
-app.get('/api/explore/routes/:id', requireAuth, async (req: AuthRequest, res: Response) => {
-    try {
-        if (!req.user) {
-            return res.status(401).json({ error: 'Unauthorized' });
-        }
-
-        const routeId = req.params.id;
-        const userId = req.user.id;
-
-        // Fetch route
-        const route = await prisma.routes.findUnique({
-            where: { id: routeId },
-        });
-
-        if (!route) {
-            return res.status(404).json({ error: 'Route not found' });
-        }
-
-        // Check ownership (optional based on privacy, but safe)
-        if (route.user_id !== userId) {
-            return res.status(403).json({ error: 'Forbidden: You do not own this route' });
-        }
-
-        // Fetch waypoints
-        const waypoints = await prisma.waypoints.findMany({
-            where: { route_id: routeId },
-            orderBy: { order_index: 'asc' },
-        });
-
-        const route_geometry = await getRouteGeometryFromWaypoints(waypoints);
-
-        // Fetch cinematic spots
-        const cinematic_spots = await prisma.cinematic_spots.findMany({
-            where: { route_id: routeId },
-        });
-
-        res.status(200).json({
-            message: 'Route details fetched successfully',
-            data: {
-                route,
-                route_geometry,
-                waypoints,
-                cinematic_spots,
-            }
-        });
-    } catch (error: any) {
-        console.error('Explore Route Fetch Error:', error);
-        res.status(500).json({ error: 'Internal Server Error fetching route details' });
-    }
-});
+app.get('/api/explore/routes/:id', requireAuth, routeDetailsHandler as any);
 
 // ===== Create: シネマティック画像スタイル変換 API =====
 import { applyThemeToImage, getCreateThemePreset, isCreateThemeId } from './src/services/imageStyleService';
 
-app.post('/api/create/generate', requireAuth, upload.array('images', 10), async (req: AuthRequest, res: Response) => {
-    try {
-        if (!req.user) {
-            return res.status(401).json({ error: 'Unauthorized' });
-        }
-
-        const userId = req.user.id;
-        const theme = req.body.theme as string;
-        const intensityInput = (req.body.intensity as string | undefined) ?? '50';
-        const files = req.files as Express.Multer.File[];
-
-        if (!theme || !files || files.length === 0) {
-            return res.status(400).json({ error: 'Theme and at least one image are required' });
-        }
-
-        if (!isCreateThemeId(theme)) {
-            return res.status(400).json({ error: 'Unsupported theme' });
-        }
-
-        let intensity: number;
-        if (intensityInput === 'normal') {
-            intensity = 50;
-        } else if (intensityInput === 'strong') {
-            intensity = 100;
-        } else {
-            intensity = Number(intensityInput);
-        }
-
-        if (!Number.isFinite(intensity) || intensity < 0 || intensity > 100) {
-            return res.status(400).json({ error: 'Intensity must be between 0 and 100' });
-        }
-
-        console.log(`[Create API] Applying image style for ${userId}, theme: ${theme}, intensity: ${intensity}, images: ${files.length}`);
-
-        const transformedImages = await Promise.all(
-            files.map(async (file, index) => {
-                const transformedBuffer = await applyThemeToImage(file.buffer, theme, intensity);
-                return {
-                    index,
-                    filename: file.originalname || `image-${index + 1}.jpg`,
-                    mime_type: 'image/jpeg',
-                    data_url: `data:image/jpeg;base64,${transformedBuffer.toString('base64')}`
-                };
-            })
-        );
-
-        const themePreset = getCreateThemePreset(theme);
-
-        // 代表値のみを DB に保存し、加工画像本体はレスポンスで返す。
+const createGenerateHandlerInstance = createGenerateHandler({
+    isCreateThemeId,
+    applyThemeToImage: (buffer, theme, intensity) => applyThemeToImage(buffer, theme as any, intensity),
+    getCreateThemePreset: (theme) => getCreateThemePreset(theme as any),
+    createCreation: async ({ userId, colorLogicMemo }) => {
         const mockMediaUrl = `styled_images_${Date.now()}.json`;
 
         const creation = await prisma.$transaction(async (tx) => {
             const newCreation = await tx.creations.create({
                 data: {
                     user_id: userId,
-                    raw_media_url: 'multiple_images_upload', // 本来は元ファイルのS3 URLなど
+                    raw_media_url: 'multiple_images_upload',
                     processed_media_url: mockMediaUrl,
                     aspect_ratio: '2.35:1',
                 }
@@ -1769,7 +1547,7 @@ app.post('/api/create/generate', requireAuth, upload.array('images', 10), async 
             await tx.cinematic_details.create({
                 data: {
                     creation_id: newCreation.id,
-                    color_logic_memo: themePreset.colorLogicMemo,
+                    color_logic_memo: colorLogicMemo,
                     narration_script: null
                 }
             });
@@ -1777,24 +1555,11 @@ app.post('/api/create/generate', requireAuth, upload.array('images', 10), async 
             return newCreation;
         });
 
-        console.log(`[Create API] Successfully styled images for user: ${userId}, creation: ${creation.id}`);
-
-        res.status(200).json({
-            message: 'Image style applied successfully',
-            data: {
-                creation_id: creation.id,
-                theme: theme,
-                intensity,
-                color_logic_memo: themePreset.colorLogicMemo,
-                processed_images: transformedImages,
-            }
-        });
-
-    } catch (error: any) {
-        console.error('Create Generation API Error:', error);
-        res.status(500).json({ error: 'Internal Server Error during image styling' });
-    }
+        return { id: creation.id };
+    },
 });
+
+app.post('/api/create/generate', requireAuth, upload.array('images', 10), createGenerateHandlerInstance as any);
 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🏍️ Ride backend running on http://0.0.0.0:${PORT}`);

@@ -131,7 +131,7 @@ describe('ExploreGuidePage', () => {
         cleanup();
     });
 
-    it('EX-UT-012 Guide詳細取得成功: API呼び出し後にHUDが表示される', async () => {
+    it('EXM-UT-004 Guide詳細取得成功: API呼び出し後にHUDが表示される', async () => {
         Object.defineProperty(global.navigator, 'geolocation', {
             configurable: true,
             value: {
@@ -149,7 +149,7 @@ describe('ExploreGuidePage', () => {
         expect(screen.getByText('撮影スポットA')).toBeInTheDocument();
     });
 
-    it('EX-UT-016 Guideクリーンアップ: アンマウントでclearWatchが呼ばれる', async () => {
+    it('EXM-UT-006 Guideクリーンアップ: アンマウントでclearWatchが呼ばれる', async () => {
         const watchPosition = vi.fn((_success: PositionCallback) => 99);
         const clearWatch = vi.fn();
         Object.defineProperty(global.navigator, 'geolocation', {
@@ -164,7 +164,7 @@ describe('ExploreGuidePage', () => {
         expect(clearWatch).toHaveBeenCalledWith(99);
     });
 
-    it('EX-UT-013 Guide詳細取得失敗: エラーメッセージを表示する', async () => {
+    it('EXM-UT-005 Guide詳細取得失敗: エラーメッセージを表示する', async () => {
         Object.defineProperty(global.navigator, 'geolocation', {
             configurable: true,
             value: {

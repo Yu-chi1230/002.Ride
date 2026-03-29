@@ -63,7 +63,7 @@ describe('HealthPage', () => {
         cleanup();
     });
 
-    it('HL-UT-001 初期表示: ヘッダーと既定モードが表示される', () => {
+    it('HP-UT-001 初期表示: ヘッダーと既定モードが表示される', () => {
         renderHealthPage();
 
         expect(screen.getByRole('heading', { level: 1, name: 'Health Check' })).toBeInTheDocument();
@@ -74,7 +74,7 @@ describe('HealthPage', () => {
         expect(screen.getByTestId('bottom-nav')).toBeInTheDocument();
     });
 
-    it('HL-UT-002 目視点検正常系: 画像選択後に解析APIを呼び出し結果を表示する', async () => {
+    it('HP-UT-013 画像解析正常系: 画像選択後に解析APIを呼び出し結果を表示する', async () => {
         const user = userEvent.setup();
         mockApiFetch.mockResolvedValue(createResponse(true, {
             data: {
@@ -111,7 +111,7 @@ describe('HealthPage', () => {
         expect(screen.getByText(/82/)).toBeInTheDocument();
     });
 
-    it('HL-UT-003 手動ODO入力チェック: 空入力では更新せず警告する', async () => {
+    it('HP-UT-016 ODO 未入力バリデーション: 空入力では更新せず警告する', async () => {
         const user = userEvent.setup();
         renderHealthPage();
 
@@ -122,7 +122,7 @@ describe('HealthPage', () => {
         expect(mockApiFetch).not.toHaveBeenCalled();
     });
 
-    it('HL-UT-004 手動ODO正常系: 更新API成功時に結果と残距離を表示する', async () => {
+    it('HP-UT-018 ODO 更新正常系: 更新API成功時に結果と残距離を表示する', async () => {
         const user = userEvent.setup();
         mockApiFetch.mockResolvedValue(createResponse(true, {
             data: {
@@ -158,7 +158,7 @@ describe('HealthPage', () => {
         expect(screen.getByText('あと1,500kmです。')).toBeInTheDocument();
     });
 
-    it('HL-UT-005 目視点検異常系: API失敗時に警告を表示する', async () => {
+    it('HP-UT-015 画像解析失敗系: API失敗時に警告を表示する', async () => {
         const user = userEvent.setup();
         mockApiFetch.mockResolvedValue(createResponse(false, {}));
 
@@ -175,7 +175,7 @@ describe('HealthPage', () => {
         });
     });
 
-    it('HL-UT-006 目視点検例外系: API例外時に警告を表示する', async () => {
+    it('HP-UT-015 画像解析失敗系: API例外時に警告を表示する', async () => {
         const user = userEvent.setup();
         mockApiFetch.mockRejectedValue(new Error('network fail'));
 
@@ -192,7 +192,7 @@ describe('HealthPage', () => {
         });
     });
 
-    it('HL-UT-007 手動ODO入力チェック: 負数入力では更新せず警告する', async () => {
+    it('HP-UT-017 ODO 不正値バリデーション: 負数入力では更新せず警告する', async () => {
         const user = userEvent.setup();
         renderHealthPage();
 
@@ -204,7 +204,7 @@ describe('HealthPage', () => {
         expect(mockApiFetch).not.toHaveBeenCalled();
     });
 
-    it('HL-UT-008 手動ODO異常系: API失敗時にレスポンスエラーを表示する', async () => {
+    it('HP-UT-019 ODO 更新失敗応答: API失敗時にレスポンスエラーを表示する', async () => {
         const user = userEvent.setup();
         mockApiFetch.mockResolvedValue(createResponse(false, {
             error: 'ODO更新に失敗しました(400)',
@@ -220,7 +220,7 @@ describe('HealthPage', () => {
         });
     });
 
-    it('HL-UT-009 手動ODO例外系: API例外時に警告を表示する', async () => {
+    it('HP-UT-020 ODO 更新例外: API例外時に警告を表示する', async () => {
         const user = userEvent.setup();
         mockApiFetch.mockRejectedValue(new Error('network fail'));
 
@@ -234,7 +234,7 @@ describe('HealthPage', () => {
         });
     });
 
-    it('HL-UT-010 音声診断異常系: 解析API失敗時に警告を表示する', async () => {
+    it('HP-UT-008 エンジン音解析失敗応答: 解析API失敗時に警告を表示する', async () => {
         const user = userEvent.setup();
         const audioTrack = { stop: vi.fn() };
         const stream = {

@@ -38,6 +38,11 @@
 - 実機のマイク入力品質、端末依存の権限ダイアログ表示
 - E2E レベルの通し検証
 
+現時点の自動テスト実装状況:
+- `frontend/src/test/HealthPage.spec.tsx` では、本仕様書の全 22 観点のうち優先度の高い 10 観点を先行して自動化している
+- 実装済み観点は `HP-UT-001`、`HP-UT-008`、`HP-UT-013`、`HP-UT-015`、`HP-UT-016`、`HP-UT-017`、`HP-UT-018`、`HP-UT-019`、`HP-UT-020` である
+- 未実装観点は結果ファイルの未確認事項として管理する
+
 ## 3. 前提条件
 
 - テストフレームワークは `Vitest` + `@testing-library/react` + `@testing-library/user-event` を想定する。
