@@ -8,19 +8,54 @@ const {
     mockApiFetch,
     mockCreateObjectURL,
     mockAlert,
+    mockUseAuth,
 } = vi.hoisted(() => ({
     mockApiFetch: vi.fn(),
     mockCreateObjectURL: vi.fn(),
     mockAlert: vi.fn(),
+    mockUseAuth: vi.fn(),
 }));
 
 vi.mock('../lib/api', () => ({
     apiFetch: mockApiFetch,
 }));
 
+vi.mock('../contexts/AuthContext', () => ({
+    useAuth: mockUseAuth,
+}));
+
 vi.mock('../../components/BottomNav', () => ({
     default: () => <div data-testid="bottom-nav" />,
 }));
+
+type ProfileOverrides = {
+    lastOilChangeMileage?: number | null;
+};
+
+const createProfileData = (overrides: ProfileOverrides = {}) => ({
+    id: 'profile-1',
+    display_name: 'Ride Taro',
+    first_name: 'Taro',
+    last_name: 'Ride',
+    vehicles: [
+        {
+            id: 'vehicle-1',
+            maker: 'Honda',
+            model_name: 'CBR250RR',
+            current_mileage: 12345,
+            last_oil_change_mileage: overrides.lastOilChangeMileage ?? 11000,
+            last_oil_change_date: '2025-01-15T00:00:00.000Z',
+            monthly_avg_mileage: 350,
+            oil_maintenance_status: {
+                item_name: 'engine_oil',
+                interval_km: 3000,
+                distance_since_last_change: 1345,
+                remaining_km: 1655,
+                is_overdue: false,
+            },
+        },
+    ],
+});
 
 function renderHealthPage() {
     return render(
@@ -43,9 +78,13 @@ describe('HealthPage', () => {
         mockApiFetch.mockReset();
         mockCreateObjectURL.mockReset();
         mockAlert.mockReset();
+        mockUseAuth.mockReset();
 
         mockCreateObjectURL.mockReturnValue('blob:preview-file');
         mockApiFetch.mockResolvedValue(createResponse(true, {}));
+        mockUseAuth.mockReturnValue({
+            profileData: createProfileData(),
+        });
 
         vi.spyOn(console, 'error').mockImplementation(() => {});
         vi.stubGlobal('alert', mockAlert);
@@ -96,7 +135,7 @@ describe('HealthPage', () => {
         fireEvent.change(input, { target: { files: [file] } });
 
         expect(mockCreateObjectURL).toHaveBeenCalledWith(file);
-        await user.click(screen.getByRole('button', { name: 'アップロード' }));
+        await user.click(screen.getByRole('button', { name: '解析開始' }));
 
         await waitFor(() => {
             expect(mockApiFetch).toHaveBeenCalledWith('/api/health/analyze', {
@@ -120,6 +159,16 @@ describe('HealthPage', () => {
 
         expect(mockAlert).toHaveBeenCalledWith('手動ODOを入力してください');
         expect(mockApiFetch).not.toHaveBeenCalled();
+    });
+
+    it('HP-UT-021 手動ODO画面表示: 前回オイル交換時の走行距離を表示する', async () => {
+        const user = userEvent.setup();
+        renderHealthPage();
+
+        await user.click(screen.getByRole('button', { name: '手動ODO' }));
+
+        expect(screen.getByText('前回オイル交換時の走行距離')).toBeInTheDocument();
+        expect(screen.getByText(/11,000/)).toBeInTheDocument();
     });
 
     it('HP-UT-018 ODO 更新正常系: 更新API成功時に結果と残距離を表示する', async () => {
@@ -168,7 +217,7 @@ describe('HealthPage', () => {
         const file = new File(['image-bytes'], 'tire.jpg', { type: 'image/jpeg' });
         const input = container.querySelector('#health-gallery-upload') as HTMLInputElement;
         fireEvent.change(input, { target: { files: [file] } });
-        await user.click(screen.getByRole('button', { name: 'アップロード' }));
+        await user.click(screen.getByRole('button', { name: '解析開始' }));
 
         await waitFor(() => {
             expect(mockAlert).toHaveBeenCalledWith('Analysis failed');
@@ -185,7 +234,7 @@ describe('HealthPage', () => {
         const file = new File(['image-bytes'], 'tire.jpg', { type: 'image/jpeg' });
         const input = container.querySelector('#health-gallery-upload') as HTMLInputElement;
         fireEvent.change(input, { target: { files: [file] } });
-        await user.click(screen.getByRole('button', { name: 'アップロード' }));
+        await user.click(screen.getByRole('button', { name: '解析開始' }));
 
         await waitFor(() => {
             expect(mockAlert).toHaveBeenCalledWith('Analysis error occurred');

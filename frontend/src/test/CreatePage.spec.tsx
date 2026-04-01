@@ -220,8 +220,10 @@ describe('CreatePage', () => {
         vi.useFakeTimers();
         const abortSpy = vi.spyOn(AbortController.prototype, 'abort');
 
-        let resolveFirst: ((value: unknown) => void) | null = null;
-        const firstPromise = new Promise((resolve) => { resolveFirst = resolve; });
+        let resolveFirst: (value: ReturnType<typeof createProcessedResponse>) => void = () => {};
+        const firstPromise = new Promise<ReturnType<typeof createProcessedResponse>>((resolve) => {
+            resolveFirst = resolve;
+        });
         mockApiFetch
             .mockImplementationOnce(() => firstPromise as Promise<unknown>)
             .mockResolvedValueOnce(createProcessedResponse('data:image/jpeg;base64,newest'));
@@ -236,7 +238,7 @@ describe('CreatePage', () => {
         expect(mockApiFetch).toHaveBeenCalledTimes(2);
         expect(abortSpy).toHaveBeenCalled();
 
-        resolveFirst?.(createProcessedResponse('data:image/jpeg;base64,old'));
+        resolveFirst(createProcessedResponse('data:image/jpeg;base64,old'));
         await Promise.resolve();
         await Promise.resolve();
 
@@ -280,8 +282,10 @@ describe('CreatePage', () => {
         const clearSpy = vi.spyOn(window, 'clearTimeout');
         const abortSpy = vi.spyOn(AbortController.prototype, 'abort');
 
-        let resolveCall: ((value: unknown) => void) | null = null;
-        const pending = new Promise((resolve) => { resolveCall = resolve; });
+        let resolveCall: (value: ReturnType<typeof createProcessedResponse>) => void = () => {};
+        const pending = new Promise<ReturnType<typeof createProcessedResponse>>((resolve) => {
+            resolveCall = resolve;
+        });
         mockApiFetch.mockImplementationOnce(() => pending as Promise<unknown>);
 
         const view = renderCreatePage();
@@ -291,7 +295,7 @@ describe('CreatePage', () => {
 
         expect(clearSpy).toHaveBeenCalled();
         expect(abortSpy).toHaveBeenCalled();
-        resolveCall?.(createProcessedResponse());
+        resolveCall(createProcessedResponse());
     });
 
     it('CR-UT-014 ファイル未選択ガード: APIを呼ばない', async () => {

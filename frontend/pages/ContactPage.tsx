@@ -11,7 +11,6 @@ const MAX_MESSAGE_LENGTH = 2000;
 type ContactCategory = 'bug' | 'question' | 'feature' | 'other';
 
 type ContactFormData = {
-    name: string;
     email: string;
     category: ContactCategory;
     subject: string;
@@ -64,7 +63,6 @@ function ContactPage() {
     const contentRef = useRef<HTMLDivElement | null>(null);
 
     const [formData, setFormData] = useState<ContactFormData>({
-        name: '',
         email: user?.email ?? '',
         category: 'question',
         subject: '',
@@ -134,7 +132,6 @@ function ContactPage() {
                 method: 'POST',
                 body: JSON.stringify({
                     email: formData.email.trim(),
-                    name: formData.name.trim() || null,
                     category: formData.category,
                     subject: formData.subject.trim(),
                     message: formData.message.trim(),
@@ -150,7 +147,6 @@ function ContactPage() {
             setSubmitMessage('送信しました。返信が必要な場合は入力したメールに連絡します。');
             setIsModalOpen(true);
             setFormData({
-                name: '',
                 email: user?.email ?? formData.email.trim(),
                 category: 'question',
                 subject: '',
@@ -176,23 +172,11 @@ function ContactPage() {
                     </button>
                     <h1>お問い合わせ</h1>
                     <p>質問、不具合報告、改善要望を受け付けています。</p>
-                    <p>個人情報や機微情報は必要最小限で入力してください。詳細は内部管理DBに保存し、Notion には運用用の要約のみ連携します。</p>
+                    <p>個人情報や機微情報は必要最小限で入力してください。</p>
                 </header>
 
                 <form className="contact-form" onSubmit={handleSubmit}>
                     <div className="contact-section">
-                        <div className="form-group">
-                            <label htmlFor="contact-name">お名前（任意）</label>
-                            <input
-                                id="contact-name"
-                                type="text"
-                                name="name"
-                                value={formData.name}
-                                onChange={handleInputChange}
-                                disabled={isSubmitting}
-                            />
-                        </div>
-
                         <div className="form-group">
                             <label htmlFor="contact-email">メールアドレス</label>
                             <input

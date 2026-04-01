@@ -202,6 +202,7 @@ function ExplorePage() {
     const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
     const [locationError, setLocationError] = useState(false);
     const [isSearching, setIsSearching] = useState(false);
+    const [searchErrorMessage, setSearchErrorMessage] = useState<string | null>(null);
     const [routeResults, setRouteResults] = useState<RouteResult[] | null>(null);
     const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
     const [isPredefinedRoute, setIsPredefinedRoute] = useState(false);
@@ -277,6 +278,7 @@ function ExplorePage() {
     const handleSearch = async (nextTimeLimit = timeLimit) => {
         if (!userLocation) return;
         setIsSearching(true);
+        setSearchErrorMessage(null);
         try {
             const res = await apiFetch('/api/explore/routes', {
                 method: 'POST',
@@ -293,9 +295,12 @@ function ExplorePage() {
                 setSelectedRouteIndex(0);
                 setIsPredefinedRoute(false);
             } else {
+                const errorData = await res.json().catch(() => null);
+                setSearchErrorMessage(errorData?.error || 'ルート生成に失敗しました。時間をおいて再度お試しください。');
                 console.error('Route search failed:', res.status);
             }
         } catch (err) {
+            setSearchErrorMessage('通信エラーが発生しました。接続を確認して再度お試しください。');
             console.error('Route search error:', err);
         } finally {
             setIsSearching(false);
@@ -506,6 +511,7 @@ function ExplorePage() {
         setRouteResults(null);
         setSelectedRouteIndex(0);
         setIsPredefinedRoute(false);
+        setSearchErrorMessage(null);
     };
 
     const handleTimeCommit = (nextTimeLimit: number) => {
@@ -629,6 +635,12 @@ function ExplorePage() {
                             約{Math.round((timeLimit / 60) * REACHABLE_AREA_AVERAGE_SPEED_KMH * REACHABLE_AREA_RETURN_MARGIN)}km
                         </span>
                     </div>
+
+                    {searchErrorMessage && (
+                        <div className="explore-search-error" role="alert">
+                            {searchErrorMessage}
+                        </div>
+                    )}
 
                     {/* 検索ボタン */}
                     <button

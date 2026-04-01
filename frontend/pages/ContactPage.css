@@ -42,6 +42,29 @@
     cursor: pointer;
 }
 
+.btn-primary {
+    background-color: #238636;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    padding: 0.8rem 1.2rem;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    text-align: center;
+}
+
+.btn-primary:hover {
+    background-color: #2ea043;
+}
+
+.btn-primary:disabled {
+    background-color: #1e5c27;
+    cursor: not-allowed;
+    color: rgba(255, 255, 255, 0.6);
+}
+
 .contact-form {
     display: flex;
     flex-direction: column;

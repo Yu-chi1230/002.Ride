@@ -363,18 +363,17 @@
 /* ===== Search Route Button ===== */
 .search-route-btn {
     width: 100%;
-    padding: 1rem 1.5rem;
-    border-radius: 4px;
-    /* シネマティック角丸 */
-    background: transparent;
-    background-color: #D4AF37;
-    border: 1px solid #D4AF37;
-    color: #0D1117;
-    font-size: 0.95rem;
-    font-weight: 300;
-    letter-spacing: 0.15em;
+    min-height: 50px;
+    padding: 0.8rem 1.2rem;
+    border-radius: 8px;
+    background-color: #238636;
+    border: none;
+    color: #ffffff;
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    transition: background-color 0.2s, transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -382,10 +381,10 @@
 }
 
 .search-route-btn:hover {
-    background: #D4AF37;
-    color: #0D1117;
+    background-color: #2ea043;
+    color: #ffffff;
     transform: translateY(-1px);
-    box-shadow: 0 10px 30px rgba(212, 175, 55, 0.2);
+    box-shadow: 0 10px 30px rgba(46, 160, 67, 0.2);
 }
 
 .search-route-btn:active {
@@ -393,9 +392,8 @@
 }
 
 .search-route-btn:disabled {
-    background: transparent;
-    border-color: #161B22;
-    color: #8B949E;
+    background-color: #1e5c27;
+    color: rgba(255, 255, 255, 0.6);
     cursor: not-allowed;
     box-shadow: none;
     transform: none;
@@ -440,6 +438,17 @@
     color: #F6E7A1;
     font-family: 'Roboto Mono', monospace;
     font-weight: 300;
+}
+
+.explore-search-error {
+    margin: 0 0 1rem;
+    padding: 0.85rem 1rem;
+    border-radius: 8px;
+    background-color: rgba(218, 54, 51, 0.2);
+    border: 1px solid rgba(218, 54, 51, 0.4);
+    color: #ff7b72;
+    font-size: 0.9rem;
+    line-height: 1.6;
 }
 
 .loading-spinner {
@@ -569,23 +578,23 @@
 /* ===== New Search Button ===== */
 .new-search-btn {
     width: 100%;
-    padding: 1rem;
+    min-height: 50px;
+    padding: 0.8rem 1.2rem;
     margin-top: 0.8rem;
-    border-radius: 4px;
-    background: transparent;
-    border: none;
-    border-bottom: 1px solid #161B22;
-    color: #8B949E;
-    font-size: 0.9rem;
-    font-weight: 300;
-    letter-spacing: 0.1em;
+    border-radius: 8px;
+    background-color: #21262d;
+    border: 1px solid rgba(240, 246, 252, 0.1);
+    color: #c9d1d9;
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: background-color 0.2s, border-color 0.2s;
 }
 
 .new-search-btn:hover {
-    color: #E6EDF3;
-    border-color: #E6EDF3;
+    background-color: #30363d;
+    border-color: #8b949e;
 }
 
 /* ===== Location Error ===== */
@@ -614,23 +623,26 @@
 }
 
 .location-retry-btn {
+    width: 100%;
+    max-width: 280px;
     margin-top: 1.5rem;
-    padding: 0.8rem 2rem;
-    border-radius: 4px;
-    background: transparent;
-    border: 1px solid #D4AF37;
-    color: #D4AF37;
-    font-size: 0.9rem;
-    font-weight: 300;
-    letter-spacing: 0.15em;
+    min-height: 50px;
+    padding: 0.8rem 1.2rem;
+    border-radius: 8px;
+    border: none;
+    color: #ffffff;
+    background-color: #238636;
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: background-color 0.2s, box-shadow 0.3s ease;
 }
 
 .location-retry-btn:hover {
-    background: #D4AF37;
-    color: #0D1117;
-    box-shadow: 0 10px 30px rgba(212, 175, 55, 0.2);
+    background-color: #2ea043;
+    color: #ffffff;
+    box-shadow: 0 10px 30px rgba(46, 160, 67, 0.2);
 }
 
 /* ===== Animations ===== */

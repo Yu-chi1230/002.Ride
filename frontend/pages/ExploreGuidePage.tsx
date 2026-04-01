@@ -231,7 +231,7 @@ export default function ExploreGuidePage() {
             map.remove();
             mapRef.current = null;
         };
-    }, [currentPos.lat, currentPos.lng]);
+    }, [loading, currentPos.lat, currentPos.lng]);
 
     useEffect(() => {
         const map = mapRef.current;
@@ -405,14 +405,6 @@ export default function ExploreGuidePage() {
                                 {' '}
                                 {nearestSpot.sun_angle_data?.best_photo_window_label ?? formatPhotoTime(nearestSpot.best_photo_time)}
                                 {nearestSpot.sun_angle_data?.best_photo_window_reason && ` ${nearestSpot.sun_angle_data.best_photo_window_reason}`}
-                            </div>
-                        )}
-                        <div className="hud-spot-guide">{nearestSpot.shooting_guide}</div>
-
-                        {nearestSpot.sun_angle_data && (
-                            <div className="hud-sun-info">
-                                <span className="sun-status-badge">Golden Hour</span>
-                                <span>光の角度: {nearestSpot.sun_angle_data.altitude}° 順光推奨</span>
                             </div>
                         )}
                     </div>

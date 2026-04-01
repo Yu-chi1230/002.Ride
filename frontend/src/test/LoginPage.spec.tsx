@@ -9,14 +9,17 @@ const {
     mockSignInWithOAuth,
     mockSetSession,
     mockApiFetch,
+    mockGetOAuthRedirectUrl,
 } = vi.hoisted(() => ({
     mockNavigate: vi.fn(),
     mockSignInWithOAuth: vi.fn(),
     mockSetSession: vi.fn(),
     mockApiFetch: vi.fn(),
+    mockGetOAuthRedirectUrl: vi.fn(),
 }));
 
 vi.mock('../lib/supabase', () => ({
+    getOAuthRedirectUrl: mockGetOAuthRedirectUrl,
     supabase: {
         auth: {
             signInWithOAuth: mockSignInWithOAuth,
@@ -51,7 +54,9 @@ describe('LoginPage', () => {
         mockSignInWithOAuth.mockReset();
         mockSetSession.mockReset();
         mockApiFetch.mockReset();
+        mockGetOAuthRedirectUrl.mockReset();
         mockSetSession.mockResolvedValue({ error: null });
+        mockGetOAuthRedirectUrl.mockReturnValue(`${window.location.origin}/home`);
         vi.spyOn(console, 'error').mockImplementation(() => {});
         vi.spyOn(console, 'log').mockImplementation(() => {});
     });

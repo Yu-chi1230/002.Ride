@@ -154,13 +154,13 @@ describe('SettingPage', () => {
         mockSignOut.mockResolvedValue(undefined);
 
         vi.spyOn(console, 'error').mockImplementation(() => {});
-        vi.spyOn(window.localStorage.__proto__, 'getItem').mockImplementation((key: string) => {
+        vi.spyOn(Storage.prototype, 'getItem').mockImplementation((key) => {
             if (key === 'default_riding_time') {
                 return '90';
             }
             return null;
         });
-        vi.spyOn(window.localStorage.__proto__, 'setItem').mockImplementation(() => {});
+        vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {});
         vi.spyOn(window, 'confirm').mockReturnValue(true);
 
         class MockFileReader {

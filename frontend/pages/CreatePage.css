@@ -515,15 +515,21 @@
 }
 
 .btn-secondary {
-    background: transparent;
-    color: #8B949E;
-    border: none;
-    border-bottom: 1px solid #161B22;
+    background-color: #21262d;
+    color: #c9d1d9;
+    border: 1px solid rgba(240, 246, 252, 0.1);
+    border-radius: 8px;
+    padding: 0.8rem 1.2rem;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+    text-align: center;
 }
 
 .btn-secondary:hover {
-    color: #E6EDF3;
-    border-color: #E6EDF3;
+    background-color: #30363d;
+    border-color: #8b949e;
 }
 
 /* Hidden canvas for export */

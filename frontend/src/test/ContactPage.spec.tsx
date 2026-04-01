@@ -58,6 +58,7 @@ describe('ContactPage', () => {
         const user = userEvent.setup();
         renderContactPage();
 
+        expect(screen.queryByLabelText('お名前（任意）')).not.toBeInTheDocument();
         await user.clear(screen.getByLabelText('メールアドレス'));
         await user.clear(screen.getByLabelText('件名'));
         await user.clear(screen.getByLabelText('内容'));
@@ -104,7 +105,6 @@ describe('ContactPage', () => {
         expect(options.method).toBe('POST');
         expect(body).toEqual({
             email: 'rider@example.com',
-            name: null,
             category: 'question',
             subject: 'アプリの挙動について',
             message: 'Explore画面でルート検索時に確認したい点があります。',

@@ -3,8 +3,9 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ExploreGuidePage from '../../pages/ExploreGuidePage';
 
-const { mockApiFetch } = vi.hoisted(() => ({
+const { mockApiFetch, mockMapConstructor } = vi.hoisted(() => ({
     mockApiFetch: vi.fn(),
+    mockMapConstructor: vi.fn(),
 }));
 
 vi.mock('../../src/lib/api', () => ({
@@ -16,7 +17,9 @@ vi.mock('maplibre-gl', () => {
         private sources = new Map<string, { setData: (data: unknown) => void }>();
         private layers = new Set<string>();
 
-        constructor(_: unknown) { }
+        constructor(options: unknown) {
+            mockMapConstructor(options);
+        }
 
         addControl() { return this; }
 
@@ -97,6 +100,7 @@ function renderGuidePage() {
 describe('ExploreGuidePage', () => {
     beforeEach(() => {
         mockApiFetch.mockReset();
+        mockMapConstructor.mockReset();
         vi.spyOn(console, 'error').mockImplementation(() => { });
         mockApiFetch.mockResolvedValue({
             ok: true,
@@ -147,6 +151,22 @@ describe('ExploreGuidePage', () => {
         });
         expect(await screen.findByText('NEXT CINEMATIC SPOT')).toBeInTheDocument();
         expect(screen.getByText('撮影スポットA')).toBeInTheDocument();
+    });
+
+    it('EXM-UT-007 Guideマップ初期化: ローディング解除後にMapが生成される', async () => {
+        Object.defineProperty(global.navigator, 'geolocation', {
+            configurable: true,
+            value: {
+                watchPosition: vi.fn(),
+                clearWatch: vi.fn(),
+            },
+        });
+
+        renderGuidePage();
+
+        await screen.findByText('NEXT CINEMATIC SPOT');
+
+        expect(mockMapConstructor).toHaveBeenCalledTimes(1);
     });
 
     it('EXM-UT-006 Guideクリーンアップ: アンマウントでclearWatchが呼ばれる', async () => {

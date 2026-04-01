@@ -39,7 +39,7 @@
 - `AuthContext` -> `/api/users/me` -> `profiles` / `vehicles` / `maintenance_settings`
 - Home 画面 -> `/api/explore/routes/latest` -> `routes`
 - Home 画面 -> Supabase `announcements` 参照
-- Health 画面 手動 ODO 更新 -> `/api/health/mileage` -> `vehicles.current_mileage` / `health_logs`
+- Health 画面 手動 ODO 更新 -> `/api/health/mileage` -> `vehicles.current_mileage` / `health_logs` / `oil_maintenance_status` 再計算結果
 - Health 画面 画像・音声診断 -> `/api/health/analyze*` -> 解析結果表示
 - Explore 画面 ルート検索 -> `/api/explore/routes` -> `routes` / `waypoints` / `cinematic_spots`
 - Explore 画面 詳細遷移 -> `/api/explore/routes/:id` -> 所有者チェック付き詳細取得
@@ -112,13 +112,13 @@
 | IT-001 | ログイン成功後にプロフィールが取得され Home へ遷移できる | LoginPage -> `/api/auth/login` -> Supabase Auth -> `/api/users/me` | 正常系 |
 | IT-002 | ログイン失敗時にロック状態を含むエラーが UI に反映される | LoginPage -> `/api/auth/login` -> `login_attempts` | 異常系 |
 | IT-003 | Home 画面で最新ルートとお知らせが取得できる | HomePage -> `/api/explore/routes/latest` -> `routes`、Supabase `announcements` | 正常系 |
-| IT-004 | Health 手動 ODO 更新で DB とメンテ状態が更新される | HealthPage -> `/api/health/mileage` -> `vehicles` / `health_logs` / `maintenance_settings` | 正常系 |
+| IT-004 | Health 手動 ODO 更新で DB とメンテ状態が更新される | HealthPage -> `/api/health/mileage` -> `vehicles` / `health_logs` / `oil_maintenance_status` 再計算結果 | 正常系 |
 | IT-005 | Health 手動 ODO 更新で前回オイル交換距離未満を拒否する | HealthPage -> `/api/health/mileage` | 異常系 |
 | IT-006 | Health 画像診断で結果が画面表示される | HealthPage -> `/api/health/analyze` | 正常系 |
 | IT-007 | Health 音声診断で結果が画面表示される | HealthPage -> `/api/health/analyze-audio` | 正常系 |
 | IT-008 | Home から最新ルートを Explore へ引き継いで表示できる | HomePage -> `/api/explore/routes/latest` -> `/explore` state 引き継ぎ | 正常系 |
 | IT-009 | Explore ルート生成で routes / waypoints / cinematic_spots が作成される | ExplorePage -> `/api/explore/routes` -> `routes` / `waypoints` / `cinematic_spots` | 正常系 |
-| IT-010 | Explore ルート生成で外部依存エラー時に DB 未反映で失敗応答となる | ExplorePage -> `/api/explore/routes` | 異常系 |
+| IT-010 | Explore ルート生成で外部依存エラー時に部分保存有無を確認して失敗応答となる | ExplorePage -> `/api/explore/routes` | 異常系 |
 | IT-011 | Explore 詳細取得で他ユーザーのルート参照を拒否する | `/api/explore/routes/:id` -> `routes` / `waypoints` / `cinematic_spots` | 異常系 |
 | IT-012 | Create 画像加工で加工結果と制作物記録が返る | CreatePage -> `/api/create/generate` -> `creations` / `cinematic_details` | 正常系 |
 | IT-013 | Settings プロフィール更新で `/api/users/me` 再取得結果へ反映される | SettingPage -> `/api/users/me` -> `profiles` / `vehicles` | 正常系 |
@@ -178,7 +178,7 @@
 
 ### IT-004 Health 手動 ODO 更新で DB とメンテ状態が更新される
 
-- テスト観点: 手動 ODO 更新の API、DB、再表示状態の整合
+- テスト観点: 手動 ODO 更新の API、DB、再計算済みメンテ状態の整合
 - 前提データ:
   1. `user-a` の `vehicles.current_mileage` が既知値である
   2. `maintenance_settings` にオイル交換サイクルが設定されている
@@ -190,7 +190,7 @@
   1. `/api/health/mileage` が 200 を返す
   2. `vehicles.current_mileage` が入力値で更新される
   3. `health_logs` に手動更新ログが 1 件追加される
-  4. レスポンスに `oil_maintenance_status` が含まれる
+  4. `maintenance_settings` 自体は更新せず、レスポンスの `vehicle.oil_maintenance_status` が再計算結果として返る
   5. 画面に更新後走行距離とメンテ状況が表示される
 
 ### IT-005 Health 手動 ODO 更新で前回オイル交換距離未満を拒否する
@@ -237,17 +237,18 @@
 
 ### IT-008 Home から最新ルートを Explore へ引き継いで表示できる
 
-- テスト観点: Home から Explore への state 引き継ぎ
+- テスト観点: Home から Explore への state 引き継ぎと latest route 単体項目の表示
 - 前提データ:
-  1. `user-a` の最新ルートに `waypoints` と `cinematic_spots` が紐づく
+  1. `user-a` の最新ルートが 1 件存在する
 - 実施手順:
   1. Home 画面でおすすめルートカードを押下する
   2. `/explore` へ遷移した画面で引き継ぎ済みルートの表示を確認する
 - 期待結果:
   1. Home では `/api/explore/routes/latest` の取得結果がカード表示に使われる
   2. カード押下時に `/explore` へ `predefinedRoute` が引き継がれる
-  3. Explore 側で引き継いだルート情報を使って、タイトル、距離、撮影スポットが表示される
-  4. この導線では `/api/explore/routes/:id` 呼び出しを必須としない
+  3. Explore 側で引き継いだルート情報を使って、少なくともタイトルと距離が表示される
+  4. `waypoints` と `cinematic_spots` は latest route API の返却対象外であるため、この導線単独では表示必須としない
+  5. この導線では `/api/explore/routes/:id` 呼び出しを必須としない
 
 ### IT-009 Explore ルート生成で routes / waypoints / cinematic_spots が作成される
 
@@ -266,9 +267,9 @@
   4. 生成された各ルートに対応する `cinematic_spots` が作成される
   5. 画面に候補ルート一覧または選択中ルート情報が表示される
 
-### IT-010 Explore ルート生成で外部依存エラー時に DB 未反映で失敗応答となる
+### IT-010 Explore ルート生成で外部依存エラー時に部分保存有無を確認して失敗応答となる
 
-- テスト観点: ルート生成失敗時のロールバックまたは未登録保証
+- テスト観点: ルート生成失敗時の失敗応答と部分保存有無の確認
 - 前提条件:
   1. スポット提案または道路ルーティング依存で失敗を再現できる
 - 実施手順:
@@ -276,8 +277,9 @@
   2. API 応答と DB を確認する
 - 期待結果:
   1. `/api/explore/routes` が 500 を返す
-  2. 失敗したリクエストに起因する `routes`、`waypoints`、`cinematic_spots` は新規作成されない
-  3. 画面側では成功結果を表示しない
+  2. 画面側では成功結果を表示しない
+  3. エラー発生前に保存済みの候補が存在しないかを `routes`、`waypoints`、`cinematic_spots` で確認する
+  4. 現行実装は候補ごとのトランザクションで保存するため、全件未反映は保証せず、部分保存の有無を記録する
 
 ### IT-011 Explore 詳細取得で他ユーザーのルート参照を拒否する
 
@@ -357,9 +359,10 @@
   2. `contact_messages` と Notion 応答を確認する
 - 期待結果:
   1. `/api/contact` が 201 を返す
-  2. `contact_messages` に本文、要約、メタデータ付きで記録される
-  3. Notion 成功時は `notion_sync_status='synced'` になる
-  4. UI に送信成功モーダルが表示される
+  2. `contact_messages` に本文とメタデータが記録される
+  3. Notion には要約付きでページ作成リクエストが送られる
+  4. Notion 成功時は `notion_sync_status='synced'` になる
+  5. UI に送信成功モーダルが表示される
 
 ### IT-017 Contact 送信で Notion 失敗時も内部記録を保持する
 
@@ -371,8 +374,8 @@
 - 期待結果:
   1. `contact_messages` には問い合わせレコードが残る
   2. `notion_sync_status='failed'` とエラー内容が保存される
-  3. API 応答は失敗理由に応じた状態を返す
-  4. UI は送信失敗として扱う
+  3. API 応答は 201 を返し、レスポンスの `notionSyncStatus` は `failed` になる
+  4. UI は送信成功として扱い、内部フォールバック失敗は DB とレスポンス値で確認する
 
 ### IT-018 管理者がお知らせ同期 API を実行すると Notion 内容が DB に反映される
 
@@ -394,6 +397,7 @@
 - `/api/health/analyze`、`/api/health/analyze-audio`、`/api/explore/routes` の実装詳細は本確認範囲では一部省略しており、外部 AI/経路依存が強いケースはモック込み結合で補う前提がある
 - Home 画面のお知らせ取得は backend API ではなく Supabase クライアント直接参照のため、RLS 設定差異の影響を受ける
 - Contact と Announcement Sync は Notion のデータベースプロパティ名に依存するため、Notion 側スキーマ変更に弱い
+- Explore ルート生成は候補単位で保存処理を行うため、外部依存エラー時に部分保存が起こりうる
 - Create 機能は `creations` 作成までが主確認対象であり、`cinematic_details`、`media_edits`、`social_assets` までの保存連携は現実装上未接続の可能性がある
 - 実行環境上、録音、位置情報、MapLibre はブラウザ機能制約を受けるため、自動テストだけでなく手動確認を前提にする
 

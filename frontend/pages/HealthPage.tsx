@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import BottomNav from '../components/BottomNav';
 import { apiFetch } from '../src/lib/api';
+import { useAuth } from '../src/contexts/AuthContext';
 import './HealthPage.css';
 
 const RECORDING_DURATION = 5; // 秒
@@ -31,6 +32,8 @@ const normalizeAnalysisResult = (input: any): NormalizedAnalysisResult | null =>
 };
 
 function HealthPage() {
+    const { profileData } = useAuth();
+    const lastOilChangeMileage = profileData?.vehicles?.[0]?.last_oil_change_mileage ?? null;
     const [currentMode, setCurrentMode] = useState<'audio' | 'camera' | 'odo'>('audio');
 
     // ===== Engine Sound States =====
@@ -489,10 +492,10 @@ function HealthPage() {
                             ) : (
                                 <div className="image-source-selector">
                                     <label htmlFor="health-camera-capture" className="source-btn">
-                                        <span className="source-label">カメラで撮影を起動</span>
+                                        <span className="source-label">カメラで撮影</span>
                                     </label>
                                     <label htmlFor="health-gallery-upload" className="source-btn">
-                                        <span className="source-label">ギャラリーから画像を選択</span>
+                                        <span className="source-label">画像を選択</span>
                                     </label>
                                 </div>
                             )}
@@ -504,7 +507,7 @@ function HealthPage() {
                                 onClick={() => handleAnalyze(logType)}
                                 disabled={isAnalyzing}
                             >
-                                {isAnalyzing ? '解析中...' : 'アップロード'}
+                                {isAnalyzing ? '解析中...' : '解析開始'}
                             </button>
                         )}
                     </div>
@@ -568,6 +571,17 @@ function HealthPage() {
                     </div>
 
                     <div className="inspection-form" style={{ width: '100%', maxWidth: '400px', margin: '0 auto' }}>
+                        <div className="form-group" style={{ marginBottom: '2rem' }}>
+                            <span style={{ color: '#8B949E', fontSize: '0.85rem', display: 'block', marginBottom: '0.8rem', letterSpacing: '0.05em' }}>
+                                前回オイル交換時の走行距離
+                            </span>
+                            <p style={{ fontSize: '1.25rem', fontWeight: '300', fontFamily: "'Roboto Mono', monospace", margin: 0 }}>
+                                {lastOilChangeMileage === null
+                                    ? '未設定'
+                                    : <>{lastOilChangeMileage.toLocaleString()} <span style={{ fontSize: '0.95rem', color: '#8B949E' }}>km</span></>}
+                            </p>
+                        </div>
+
                         <div className="form-group" style={{ marginBottom: '2rem' }}>
                             <label style={{ color: '#8B949E', fontSize: '0.85rem', display: 'block', marginBottom: '0.8rem', letterSpacing: '0.05em' }}>
                                 手動 ODO 入力

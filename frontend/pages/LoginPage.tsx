@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../src/lib/supabase';
+import { getOAuthRedirectUrl, supabase } from '../src/lib/supabase';
 import { apiFetch } from '../src/lib/api';
 import './LoginPage.css';
 
@@ -22,12 +22,12 @@ function LoginPage() {
     const [showPassword, setShowPassword] = useState(false);
 
     const handleGoogleLogin = async () => {
+        setErrorMsg('');
         try {
             const { error } = await supabase.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
-                    // Redirect back to app after login - in production this would be the actual domain
-                    redirectTo: `${window.location.origin}/home`
+                    redirectTo: getOAuthRedirectUrl(),
                 }
             });
             if (error) {
