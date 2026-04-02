@@ -32,11 +32,11 @@
 | ST-007 Explore ルート生成 | OK | `/api/explore/routes` が 200、`routes` 作成成立 |
 | ST-008 Explore ガイド | OK | 所有者の `/api/explore/routes/:id` が 200 |
 | ST-008A Explore 権限制御 | OK | 他ユーザーの `/api/explore/routes/:id` が 403 |
-| ST-009 Create 画像生成 | 一部確認 | `/api/create/generate` が 200、`creations` 作成成立。変換後画像表示とダウンロード開始の実機確認は未実施 |
+| ST-009 Create 画像生成 | OK | `/api/create/generate` が 200、`creations` 作成成立。実画面と DB 確認の結果、変換後画像表示とダウンロード開始も仕様書通り |
 | ST-010 Settings 更新 | OK | 有効な走行距離前提では `/api/users/me` PUT が 200、再取得値も一致 |
 | ST-010A Settings 背景画像更新 | 一部確認 | 実機確認で背景画像変更後に Home 反映と再読込後の維持を確認。実装上は API/DB 保存ではなく `localStorage(home_bg_image)` |
 | ST-011 オイル履歴自動反映 | OK | `maintenance_history` 1 件作成を確認 |
-| ST-012A 問い合わせ連携成功 | 一部確認 | `/api/contact` が 201、`notion_sync_status='synced'` を確認。送信完了 UI の実機確認は未実施 |
+| ST-012A 問い合わせ連携成功 | OK | `/api/contact` が 201、`notion_sync_status='synced'` を確認。実画面確認でも送信完了 UI を含めて問題なし |
 | ST-012B 問い合わせ連携失敗耐性 | 一部確認 | Notion を 401 失敗させても `/api/contact` は 201、`contact_messages` 保存と `notion_sync_status='failed'` を確認。送信結果 UI の実機確認は未実施 |
 | ST-013A 認証/入力不備 | OK | ログイン 5 回目で 429、ODO 負数は 400、不正メール問い合わせは 400 |
 | ST-013B 外部障害耐性 | 一部確認 | 画像診断に不正画像を送ると Gemini 側 `INVALID_ARGUMENT` で 500。画面確認は未実施 |
@@ -77,7 +77,7 @@
 - ST-009
   - `/api/create/generate` は 2 ユーザーで 200。
   - `creations` 作成を確認。
-  - 変換後画像の画面表示とダウンロード開始の実機確認は未実施。
+  - 実画面と DB 確認の結果、変換後画像の画面表示とダウンロード開始が仕様書通りであることを確認。
 - ST-010 / ST-011
   - `current_mileage=1500` の前提で `/api/users/me` PUT は 200。
   - `display_name='updated-system-a'`, `maker='Suzuki'`, `model_name='GSX250R'`, `last_oil_change_mileage=1200` を確認。
@@ -90,7 +90,7 @@
 - ST-012A
   - `/api/contact` は 201。
   - `contact_messages` 追加と `notion_sync_status='synced'` を確認。
-  - 送信完了メッセージの実機確認は未実施。
+  - 実画面確認で送信完了 UI を含めて仕様書通りに問題ないことを確認。
 - ST-012B
   - 一時 backend を別ポートで起動し、`NOTION_TOKEN` を無効化して Notion 401 を再現。
   - `/api/contact` は 201 を返し、問い合わせ本体は保存継続。
@@ -122,8 +122,6 @@
 
 ## 6. 未確認事項
 - ST-013B のうち Notion 障害、ルーティング障害、Create 障害の画面確認
-- ST-009 の変換後画像表示とダウンロード開始の実機確認
-- ST-012A の送信完了 UI 実機確認
 - ST-012B の送信結果 UI 実機確認
 
 ## 7. 残リスク

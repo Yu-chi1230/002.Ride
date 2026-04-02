@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Cropper from 'react-easy-crop';
 import getCroppedImg from '../src/lib/cropImage';
 import { useAuth } from '../src/contexts/AuthContext';
@@ -17,8 +17,10 @@ const formatDateForInput = (value: string | Date | null | undefined): string => 
 
 function SettingPage() {
     const navigate = useNavigate();
+    const location = useLocation();
     const { profileData, refreshProfile } = useAuth();
     const oilMaintenanceStatus = profileData?.vehicles?.[0]?.oil_maintenance_status ?? null;
+    const contentRef = useRef<HTMLDivElement>(null);
 
     // Status states
     const [isEditing, setIsEditing] = useState(false);
@@ -74,6 +76,28 @@ function SettingPage() {
             });
         }
     }, [profileData]);
+
+    useEffect(() => {
+        const shouldScrollToTop =
+            typeof location.state === 'object' &&
+            location.state !== null &&
+            'scrollToTop' in location.state &&
+            location.state.scrollToTop === true;
+
+        if (!shouldScrollToTop) {
+            return;
+        }
+
+        const rootElement = document.getElementById('root');
+
+        if (rootElement) {
+            rootElement.scrollTop = 0;
+        }
+
+        if (contentRef.current) {
+            contentRef.current.scrollTop = 0;
+        }
+    }, [location.state]);
 
     // Background Image
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -288,7 +312,7 @@ function SettingPage() {
 
     return (
         <div className="setting-page">
-            <div className="setting-content">
+            <div ref={contentRef} className="setting-content">
                 <header className="setting-header">
                     <h1>Settings</h1>
                 </header>

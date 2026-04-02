@@ -86,7 +86,7 @@ describe('ContactPage', () => {
         expect(rootElement.scrollTop).toBe(0);
     });
 
-    it('CP-UT-002 正常送信時は /api/contact に送信し成功モーダルを出す', async () => {
+    it('CP-UT-002 正常送信時は /api/contact に送信し成功モーダルを出した後に /settings へ遷移する', async () => {
         const user = userEvent.setup();
         renderContactPage();
 
@@ -120,5 +120,9 @@ describe('ContactPage', () => {
         expect(await screen.findByRole('dialog')).toBeInTheDocument();
         expect(screen.getByRole('heading', { name: '送信完了' })).toBeInTheDocument();
         expect(screen.getByText('送信しました。返信が必要な場合は入力したメールに連絡します。')).toBeInTheDocument();
+
+        await user.click(screen.getByRole('button', { name: '閉じる' }));
+
+        expect(mockNavigate).toHaveBeenCalledWith('/settings', { state: { scrollToTop: true } });
     });
 });

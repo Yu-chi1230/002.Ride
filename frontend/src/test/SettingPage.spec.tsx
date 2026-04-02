@@ -210,6 +210,53 @@ describe('SettingPage', () => {
         expect(getInputByName(container, 'display_name')).toBeDisabled();
     });
 
+    it('ST-UT-001A 問い合わせ完了後の遷移 state がある場合は画面先頭へスクロールする', () => {
+        const originalScrollTopDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollTop');
+        const rootElement = document.createElement('div');
+        rootElement.scrollTop = 320;
+        const getElementByIdSpy = vi.spyOn(document, 'getElementById').mockImplementation((id: string) => {
+            if (id === 'root') {
+                return rootElement;
+            }
+            return null;
+        });
+        Object.defineProperty(HTMLElement.prototype, 'scrollTop', {
+            configurable: true,
+            writable: true,
+            value: 180,
+        });
+
+        mockUseAuth.mockReturnValue({
+            profileData: createProfileData(),
+            refreshProfile: mockRefreshProfile,
+        });
+
+        try {
+            const { container } = render(
+                <MemoryRouter initialEntries={[{ pathname: '/settings', state: { scrollToTop: true } }]}>
+                    <SettingPage />
+                </MemoryRouter>
+            );
+
+            const contentElement = container.querySelector<HTMLElement>('.setting-content');
+            expect(contentElement).not.toBeNull();
+
+            if (!contentElement) {
+                throw new Error('setting-content not found');
+            }
+
+            expect(getElementByIdSpy).toHaveBeenCalledWith('root');
+            expect(rootElement.scrollTop).toBe(0);
+            expect(contentElement.scrollTop).toBe(0);
+        } finally {
+            if (originalScrollTopDescriptor) {
+                Object.defineProperty(HTMLElement.prototype, 'scrollTop', originalScrollTopDescriptor);
+            } else {
+                delete (HTMLElement.prototype as { scrollTop?: number }).scrollTop;
+            }
+        }
+    });
+
     it('ST-UT-002/ST-UT-003 プロフィール編集開始とキャンセル: 入力活性化後に元の値へ戻す', async () => {
         const user = userEvent.setup();
         const { container } = renderSettingPage();

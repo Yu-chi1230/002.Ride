@@ -103,6 +103,14 @@ function ContactPage() {
         setErrors((prev) => ({ ...prev, [name]: undefined }));
     };
 
+    const handleCloseModal = () => {
+        setIsModalOpen(false);
+
+        if (submitState === 'success') {
+            navigate('/settings', { state: { scrollToTop: true } });
+        }
+    };
+
     const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
 
@@ -273,7 +281,7 @@ function ContactPage() {
                         <button
                             type="button"
                             className="btn-primary contact-modal-button"
-                            onClick={() => setIsModalOpen(false)}
+                            onClick={handleCloseModal}
                         >
                             閉じる
                         </button>
