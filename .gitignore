@@ -1,21 +1,29 @@
-# Git Ignored Directories
-docs/DB/
-supabase/
-docker-compose.yml
+# Local helper scripts
 ride.sh
 
 # Node modules
 node_modules/
 dist/
 build/
+coverage/
 
 # Environment variables
 .env
 .env.local
 .env.*.local
+backend/.env
+frontend/.env
+supabase/.env
 
-# Docker
+# Logs
 *.log
+
+# TypeScript build cache
+*.tsbuildinfo
+
+# Supabase local runtime data
+supabase/volumes/db/data/
+supabase/volumes/logs/
 
 # OS generated files
 .DS_Store
