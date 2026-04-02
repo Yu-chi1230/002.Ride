@@ -1,0 +1,48 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: sh -c "npx prisma generate && npm run dev"
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./backend:/app
+      - ./shared:/shared
+      - /app/node_modules
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GOOGLE_CLOUD_VISION_API_KEY=${GOOGLE_CLOUD_VISION_API_KEY}
+      - DATABASE_URL=${DATABASE_URL}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+      - NOTION_TOKEN=${NOTION_TOKEN}
+      - NOTION_CONTACT_DATABASE_ID=${NOTION_CONTACT_DATABASE_ID}
+      - NOTION_ANNOUNCEMENT_DATABASE_ID=${NOTION_ANNOUNCEMENT_DATABASE_ID}
+      - LOGIN_MAX_ATTEMPTS=${LOGIN_MAX_ATTEMPTS}
+      - LOGIN_LOCK_MINUTES=${LOGIN_LOCK_MINUTES}
+      - LOGIN_ATTEMPT_WINDOW_MINUTES=${LOGIN_ATTEMPT_WINDOW_MINUTES}
+      - LOGIN_LOCK_MULTIPLIER=${LOGIN_LOCK_MULTIPLIER}
+      - LOGIN_LOCK_MAX_MINUTES=${LOGIN_LOCK_MAX_MINUTES}
+    restart: "no"
+    networks:
+      - default
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5174:5174"
+    volumes:
+      - ./frontend:/app
+      - ./shared:/shared
+      - ./docs:/docs
+      - /app/node_modules
+    restart: "no"
+    networks:
+      - default
+
+networks:
+  default:
+    name: 002ride_default
