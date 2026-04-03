@@ -58,6 +58,8 @@ const REACHABLE_AREA_AVERAGE_SPEED_KMH = 32;
 const REACHABLE_AREA_RETURN_MARGIN = 0.62;
 const REACHABLE_AREA_POINT_COUNT = 36;
 const EXPLORE_ROUTE_TIMEOUT_MS = 60000;
+const DEFAULT_LOCATION = { lat: 32.8032, lng: 130.7079 };
+const LOCATION_FALLBACK_TIMEOUT_MS = 4500;
 const MAP_STYLE_URL =
     import.meta.env.VITE_MAP_STYLE_URL ||
     (import.meta.env.VITE_MAPTILER_KEY
@@ -200,9 +202,11 @@ function ExplorePage() {
     // 状態管理
     const [timeLimit, setTimeLimit] = useState(() => parseInt(localStorage.getItem('default_riding_time') || '60', 10));
     const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+    const [isLocating, setIsLocating] = useState(true);
     const [locationError, setLocationError] = useState(false);
     const [isSearching, setIsSearching] = useState(false);
     const [searchErrorMessage, setSearchErrorMessage] = useState<string | null>(null);
+    const [mapUnavailableMessage, setMapUnavailableMessage] = useState<string | null>(null);
     const [routeResults, setRouteResults] = useState<RouteResult[] | null>(null);
     const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
     const [isPredefinedRoute, setIsPredefinedRoute] = useState(false);
@@ -245,18 +249,45 @@ function ExplorePage() {
 
     // ===== 現在地取得 =====
     const fetchLocation = useCallback(() => {
+        setIsLocating(true);
         setLocationError(false);
         if (!navigator.geolocation) {
             setLocationError(true);
+            setUserLocation(DEFAULT_LOCATION);
+            setIsLocating(false);
             return;
         }
+
+        let isResolved = false;
+        const fallbackTimer = window.setTimeout(() => {
+            if (isResolved) {
+                return;
+            }
+            isResolved = true;
+            setLocationError(true);
+            setUserLocation(DEFAULT_LOCATION);
+            setIsLocating(false);
+        }, LOCATION_FALLBACK_TIMEOUT_MS);
+
         navigator.geolocation.getCurrentPosition(
             (pos) => {
+                if (isResolved) {
+                    return;
+                }
+                isResolved = true;
+                window.clearTimeout(fallbackTimer);
                 setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+                setIsLocating(false);
             },
             () => {
-                // 位置情報が取得できない場合は熊本市（デフォルト）を使用
-                setUserLocation({ lat: 32.8032, lng: 130.7079 });
+                if (isResolved) {
+                    return;
+                }
+                isResolved = true;
+                window.clearTimeout(fallbackTimer);
+                setLocationError(true);
+                setUserLocation(DEFAULT_LOCATION);
+                setIsLocating(false);
             },
             { enableHighAccuracy: true, timeout: 8000 }
         );
@@ -325,21 +356,29 @@ function ExplorePage() {
             return;
         }
 
-        const map = new maplibregl.Map({
-            container: mapContainerRef.current,
-            style: MAP_STYLE_URL,
-            center: [userLocation.lng, userLocation.lat],
-            zoom: 11,
-            attributionControl: false,
-        });
-        map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
-        map.on('load', () => applyJapaneseLabelPreference(map));
-        mapRef.current = map;
+        let map: maplibregl.Map | null = null;
+        try {
+            map = new maplibregl.Map({
+                container: mapContainerRef.current,
+                style: MAP_STYLE_URL,
+                center: [userLocation.lng, userLocation.lat],
+                zoom: 11,
+                attributionControl: false,
+            });
+            map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+            map.on('load', () => applyJapaneseLabelPreference(map));
+            mapRef.current = map;
+            setMapUnavailableMessage(null);
+        } catch (error) {
+            console.error('Map initialization failed:', error);
+            setMapUnavailableMessage('この環境では地図を表示できません。探索機能はそのまま利用できます。');
+            return;
+        }
 
         return () => {
             spotMarkersRef.current.forEach((marker) => marker.remove());
             spotMarkersRef.current = [];
-            map.remove();
+            map?.remove();
             mapRef.current = null;
         };
     }, [userLocation]);
@@ -530,9 +569,16 @@ function ExplorePage() {
     return (
         <div className="explore-page">
             {/* ===== 地図 ===== */}
-            {userLocation && (
+            {userLocation && !mapUnavailableMessage && (
                 <div className="explore-map-container">
                     <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }} />
+                </div>
+            )}
+
+            {userLocation && mapUnavailableMessage && (
+                <div className="explore-map-fallback" role="status">
+                    <div className="explore-map-fallback-badge">MAP UNAVAILABLE</div>
+                    <p className="explore-map-fallback-text">{mapUnavailableMessage}</p>
                 </div>
             )}
 
@@ -571,6 +617,13 @@ function ExplorePage() {
             </div>
 
             {/* ===== 位置情報エラー ===== */}
+            {isLocating && !userLocation && (
+                <div className="location-loading" role="status" aria-live="polite">
+                    <div className="loading-spinner" />
+                    <p className="location-loading-text">位置情報を取得しています...</p>
+                </div>
+            )}
+
             {locationError && !userLocation && (
                 <div className="location-error">
                     <div className="location-error-icon">📍</div>
@@ -582,6 +635,12 @@ function ExplorePage() {
                     <button className="location-retry-btn" onClick={fetchLocation}>
                         再取得
                     </button>
+                </div>
+            )}
+
+            {locationError && userLocation && (
+                <div className="explore-location-notice" role="status">
+                    位置情報を取得できなかったため、デフォルト地点から表示しています。
                 </div>
             )}
 

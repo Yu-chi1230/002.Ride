@@ -1,11 +1,12 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ExplorePage from '../../pages/ExplorePage';
 
-const { mockApiFetch } = vi.hoisted(() => ({
+const { mockApiFetch, mockMapConstructor } = vi.hoisted(() => ({
     mockApiFetch: vi.fn(),
+    mockMapConstructor: vi.fn(),
 }));
 
 vi.mock('../../components/BottomNav', () => ({
@@ -27,7 +28,9 @@ vi.mock('maplibre-gl', () => {
         private sources = new Map<string, { setData: (data: unknown) => void }>();
         private layers = new Set<string>();
 
-        constructor(_: unknown) { }
+        constructor(options: unknown) {
+            mockMapConstructor(options);
+        }
 
         addControl() { return this; }
 
@@ -117,6 +120,15 @@ function setupGeolocation() {
     });
 }
 
+function setupPendingGeolocation() {
+    Object.defineProperty(global.navigator, 'geolocation', {
+        configurable: true,
+        value: {
+            getCurrentPosition: vi.fn(),
+        },
+    });
+}
+
 function renderExplorePage() {
     return render(
         <MemoryRouter initialEntries={['/explore']}>
@@ -132,6 +144,7 @@ describe('ExplorePage', () => {
         setupGeolocation();
         vi.spyOn(console, 'error').mockImplementation(() => { });
         mockApiFetch.mockReset();
+        mockMapConstructor.mockReset();
         mockApiFetch.mockResolvedValue({
             ok: true,
             json: vi.fn().mockResolvedValue({
@@ -204,5 +217,33 @@ describe('ExplorePage', () => {
         await waitFor(() => {
             expect(screen.getByRole('button', { name: '探索を開始する' })).toBeEnabled();
         });
+    });
+
+    it('EXM-UT-004 位置情報保留時: ローディング後にデフォルト地点へフォールバックする', async () => {
+        vi.useFakeTimers();
+        setupPendingGeolocation();
+        renderExplorePage();
+
+        expect(screen.getByText('位置情報を取得しています...')).toBeInTheDocument();
+
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(4500);
+        });
+
+        expect(screen.getByText('探索を開始する')).toBeInTheDocument();
+        expect(screen.getByText('位置情報を取得できなかったため、デフォルト地点から表示しています。')).toBeInTheDocument();
+
+        vi.useRealTimers();
+    });
+
+    it('EXM-UT-005 WebGL失敗時: 地図フォールバックと探索UIを表示する', async () => {
+        mockMapConstructor.mockImplementationOnce(() => {
+            throw new Error('Failed to initialize WebGL');
+        });
+
+        renderExplorePage();
+
+        expect(await screen.findByText('この環境では地図を表示できません。探索機能はそのまま利用できます。')).toBeInTheDocument();
+        expect(screen.getByText('探索を開始する')).toBeInTheDocument();
     });
 });
